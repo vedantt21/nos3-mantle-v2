@@ -1,3 +1,15 @@
+# IMPORTANT
+
+Currently the submodules may be pointing in different places. The one in .gitmodules and git submodule status may not be pointing to the same submodule.
+This is to ensure commits could be saved, without pushing code into the original submodule's repository.
+
+To do this, a forked version of the original submodule gsw/cosmos was created, and the code was pushed to this. This submodule is saved in the tcs-development branch.
+
+When in main, and trying to run the code, 
+run 
+
+git submodule sync --recursive and this will ensure the submodules are operating as required.
+
 # NASA Operational Simulator for Small Satellites (NOS3)
 
 NOS3 is a suite of tools developed by NASA's Katherine Johnson Independent Verification and Validation (IV&V) Facility to aid in areas such as software development, integration & test (I&T), mission operations/training, verification and validation (V&V), and software systems check-out. 
