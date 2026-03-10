@@ -45,7 +45,7 @@
 	url = https://github.com/nasa-itc/OrbitInviewPowerPrediction.git
 [submodule "gsw/cosmos"]
 	path = gsw/cosmos
-	url = https://github.com/nasa-itc/gsw-cosmos.git
+	url = https://github.com/vedantt21/gsw-cosmos-dev.git
 	branch = main
 [submodule "sims/truth_42_sim"]
 	path = sims/truth_42_sim
