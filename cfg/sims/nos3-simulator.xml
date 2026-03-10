@@ -160,6 +160,29 @@
             </hardware-model>
         </simulator>
 
+
+        <simulator>
+            <name>tcs-sim</name>
+            <active>true</active>
+            <library>libtcs_sim.so</library>
+            <hardware-model>
+                <type>TCS</type>
+                <connections>
+                    <connection><type>command</type>
+                        <bus-name>command</bus-name>
+                        <node-name>tcs-sim-command</node-name>
+                    </connection>
+                    <connection><type>usart</type>
+                        <bus-name>usart_18</bus-name>
+                        <node-port>18</node-port>
+                    </connection>
+                </connections>
+                <data-provider>
+                    <type>TCS_PROVIDER</type>
+                </data-provider>
+            </hardware-model>
+        </simulator>
+
         <simulator>
             <name>gps</name>
             <active>true</active>

@@ -65,6 +65,7 @@
 #include "generic_star_tracker_msgids.h"
 #include "mgr_msgids.h"
 #include "syn_msgids.h"
+#include "tcs_msgids.h"
 
 /*
 ** Local Structure Declarations
@@ -120,6 +121,8 @@ TO_LAB_Subs_t TO_LAB_Subs =
         {CFE_SB_MSGID_WRAP_VALUE(NOVATEL_OEM615_DEVICE_TLM_MID),{0,0},  32},
         {CFE_SB_MSGID_WRAP_VALUE(SAMPLE_HK_TLM_MID),            {0,0},  32},
         {CFE_SB_MSGID_WRAP_VALUE(SAMPLE_DEVICE_TLM_MID),        {0,0},  32},
+        {CFE_SB_MSGID_WRAP_VALUE(TCS_HK_TLM_MID),               {0,0},  32},
+        {CFE_SB_MSGID_WRAP_VALUE(TCS_DEVICE_TLM_MID),           {0,0},  32},
         {CFE_SB_MSGID_WRAP_VALUE(GENERIC_ADCS_HK_TLM_MID),      {0,0},  32},
         {CFE_SB_MSGID_WRAP_VALUE(GENERIC_ADCS_DI_MID),          {0,0},  32},
         {CFE_SB_MSGID_WRAP_VALUE(GENERIC_ADCS_AD_MID),          {0,0},  32},

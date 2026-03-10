@@ -166,6 +166,11 @@ gnome-terminal --tab --title="Sample Sim" -- $DFLAGS -v $SIM_DIR:$SIM_DIR --name
 gnome-terminal --title="Sample Checkout" -- $DFLAGS -v $BASE_DIR:$BASE_DIR --name $SC_NUM"_sample_checkout" --network=$SC_NETNAME -w $BASE_DIR $DBOX ./components/sample/fsw/standalone/build/sample_checkout
 
 
+gnome-terminal --tab --title="TCS Sim" -- $DFLAGS -v $SIM_DIR:$SIM_DIR --name $SC_NUM"_tcs_sim" --network=$SC_NETNAME -w $SIM_BIN $DBOX ./nos3-single-simulator $SC_CFG_FILE tcs_sim
+gnome-terminal --title="TCS Checkout" -- $DFLAGS -v $BASE_DIR:$BASE_DIR --name $SC_NUM"_tcs_checkout" --network=$SC_NETNAME -w $BASE_DIR $DBOX ./components/tcs/fsw/standalone/build/tcs_checkout
+
+
+
 ##
 ## Star Tracker
 ##

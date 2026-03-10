@@ -119,6 +119,7 @@ else:
         sc_radio_en = sc_root.find('components/radio/enable').text
         sc_rw_en = sc_root.find('components/rw/enable').text
         sc_sample_en = sc_root.find('components/sample/enable').text
+        sc_tcs_en = sc_root.find('components/tcs/enable').text
         sc_st_en = sc_root.find('components/st/enable').text
         sc_syn_en = sc_root.find('components/syn/enable').text
         sc_torquer_en = sc_root.find('components/torquer/enable').text
@@ -162,6 +163,7 @@ else:
             syn_line = ""
             torquer_line = ""
             thruster_line = ""
+            tcs_line = ""
             
             # Parse lines
             for line in lines:
@@ -222,6 +224,9 @@ else:
                 if line.find('SAMPLE,') != -1:
                     if (sc_sample_en == 'true'):
                         sample_line = line
+                if line.find('TCS,') != -1:
+                    if (sc_tcs_en == 'true'):
+                        tcs_line = line
                 if line.find('ST,') != -1:
                     if (sc_st_en == 'true'):
                         st_line = line
@@ -259,6 +264,7 @@ else:
         lines.insert(sc_startup_eof, fm_line)
         lines.insert(sc_startup_eof, ds_line)
         lines.insert(sc_startup_eof, cf_line)
+        lines.insert(sc_startup_eof, tcs_line)
                         
         # Write startup script file
         with open('./cfg/build/nos3_defs/cpu1_cfe_es_startup.scr', 'w') as fp:
@@ -325,6 +331,7 @@ else:
         rw2_to_index = 999
         rw2_from_index = 999
         #sample_index = 999
+        #tcs_index = 999
         st_index = 999
         torquer_index = 999
         thruster_index = 999
@@ -372,6 +379,9 @@ else:
                 #if line.find('Sample IPC') != -1:
                 #    if (lines.index(line)) < sample_index:
                 #        sample_index = lines.index(line) + 1
+                #if line.find('TCS IPC') != -1:
+                #    if (lines.index(line)) < tcs_index:
+                #        tcs_index = lines.index(line) + 1
                 if line.find('Star Tracker IPC') != -1:
                     if (lines.index(line)) < st_index:
                         st_index = lines.index(line) + 1
@@ -407,6 +417,8 @@ else:
             lines[rw2_from_index] = ipc_off
         #if (sc_sample_en != 'true'):
         #    lines[sample_index] = ipc_off
+        #if (sc_tcs_en != 'true'):
+        #    lines[tcs_index] = ipc_off
         if (sc_st_en != 'true'):
             lines[st_index] = ipc_off
         if (sc_torquer_en != 'true'):
@@ -435,6 +447,7 @@ else:
         rw1_index = 999
         rw2_index = 999
         sample_index = 999
+        tcs_index = 999
         st_index = 999
         torquer_index = 999
         thruster_index = 999
@@ -480,6 +493,9 @@ else:
                 if line.find('sample-sim</name>') != -1:
                     if (lines.index(line)) < sample_index:
                         sample_index = lines.index(line) + 1
+                if line.find('tcs-sim</name>') != -1:
+                    if (lines.index(line)) < tcs_index:
+                        tcs_index = lines.index(line) + 1
                 if line.find('star-tracker-sim</name>') != -1:
                     if (lines.index(line)) < st_index:
                         st_index = lines.index(line) + 1
@@ -513,6 +529,8 @@ else:
             lines[rw2_index] = sim_disabled
         if (sc_sample_en != 'true'):
             lines[sample_index] = sim_disabled
+        if (sc_tcs_en != 'true'):
+            lines[tcs_index] = sim_disabled
         if (sc_st_en != 'true'):
             lines[st_index] = sim_disabled
         if (sc_torquer_en != 'true'):

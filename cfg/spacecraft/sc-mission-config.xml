@@ -66,6 +66,9 @@
 		<syn>
 			<enable>false</enable>
 		</syn>
+		<tcs>
+			<enable>true</enable>
+		</tcs>
 		<torquer>
 			<enable>true</enable>
 		</torquer>

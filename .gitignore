@@ -34,3 +34,5 @@ docs/wiki/_build
 docs/wiki/_templates
 *.bkp
 *.html
+
+venv/
