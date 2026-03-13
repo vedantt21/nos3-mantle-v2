@@ -1,5 +1,5 @@
 TELEMETRY TCS TCS_HK_TLM <%= CosmosCfsConfig::PROCESSOR_ENDIAN %> "TCS_Hk_tlm_t"
-  APPEND_ID_ITEM CCSDS_STREAMID       16 UINT 0x08FC  "CCSDS Packet Identification" BIG_ENDIAN
+  APPEND_ID_ITEM CCSDS_STREAMID       16 UINT 0x08F1 "CCSDS Packet Identification" BIG_ENDIAN
   APPEND_ITEM    CCSDS_SEQUENCE       16 UINT         "CCSDS Packet Sequence Control" BIG_ENDIAN
   APPEND_ITEM    CCSDS_LENGTH         16 UINT         "CCSDS Packet Data Length" BIG_ENDIAN
   APPEND_ITEM    CCSDS_SECONDS        32 UINT         "CCSDS Telemetry Secondary Header (seconds)" BIG_ENDIAN
@@ -18,7 +18,7 @@ TELEMETRY TCS TCS_HK_TLM <%= CosmosCfsConfig::PROCESSOR_ENDIAN %> "TCS_Hk_tlm_t"
   APPEND_ITEM    DEVICE_STATUS        32 UINT         "Reported Device Status"
 
 TELEMETRY TCS TCS_DATA_TLM <%= CosmosCfsConfig::PROCESSOR_ENDIAN %> "TCS_Device_tlm_t"
-  APPEND_ID_ITEM CCSDS_STREAMID       16 UINT 0x08FD  "CCSDS Packet Identification" BIG_ENDIAN
+  APPEND_ID_ITEM CCSDS_STREAMID       16 UINT 0x08F2  "CCSDS Packet Identification" BIG_ENDIAN
   APPEND_ITEM    CCSDS_SEQUENCE       16 UINT         "CCSDS Packet Sequence Control" BIG_ENDIAN
   APPEND_ITEM    CCSDS_LENGTH         16 UINT         "CCSDS Packet Data Length" BIG_ENDIAN
   APPEND_ITEM    CCSDS_SECONDS        32 UINT         "CCSDS Telemetry Secondary Header (seconds)" BIG_ENDIAN
