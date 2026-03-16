@@ -52,14 +52,14 @@ end
 
 def enable_tcs()
     # Send command
-    tcs_cmd("TCS TCS_ENABLE_CC")
+    tcs_cmd("TCS HEATER_ENABLE")
     # Confirm
     check("TCS TCS_HK_TLM DEVICE_ENABLED == 'ENABLED'")
 end
 
 def disable_tcs()
     # Send command
-    tcs_cmd("TCS TCS_DISABLE_CC")
+    tcs_cmd("TCS HEATER_DISABLE")
     # Confirm
     check("TCS TCS_HK_TLM DEVICE_ENABLED == 'DISABLED'")
 end

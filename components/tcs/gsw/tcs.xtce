@@ -155,7 +155,7 @@
             </xtce:EntryList>
           </xtce:CommandContainer>
         </xtce:MetaCommand>
-        <xtce:MetaCommand name="TCS_DISABLE_CC">
+        <xtce:MetaCommand name="HEATER_DISABLE">
           <xtce:BaseMetaCommand metaCommandRef="/CCSDS/CCSDS_TC">
             <xtce:ArgumentAssignmentList>
               <xtce:ArgumentAssignment argumentName="CCSDS_STREAMID" argumentValue="6394"/>
@@ -163,11 +163,11 @@
             </xtce:ArgumentAssignmentList>
           </xtce:BaseMetaCommand>
           <xtce:ArgumentList/>
-          <xtce:CommandContainer name="TCS_TCS_DISABLE_CC_CommandContainer">
+          <xtce:CommandContainer name="TCS_HEATER_DISABLE_CommandContainer">
             <xtce:EntryList/>
           </xtce:CommandContainer>
         </xtce:MetaCommand>
-        <xtce:MetaCommand name="TCS_ENABLE_CC">
+        <xtce:MetaCommand name="HEATER_ENABLE">
           <xtce:BaseMetaCommand metaCommandRef="/CCSDS/CCSDS_TC">
             <xtce:ArgumentAssignmentList>
               <xtce:ArgumentAssignment argumentName="CCSDS_STREAMID" argumentValue="6394"/>
@@ -175,7 +175,7 @@
             </xtce:ArgumentAssignmentList>
           </xtce:BaseMetaCommand>
           <xtce:ArgumentList/>
-          <xtce:CommandContainer name="TCS_TCS_ENABLE_CC_CommandContainer">
+          <xtce:CommandContainer name="TCS_HEATER_ENABLE_CommandContainer">
             <xtce:EntryList/>
           </xtce:CommandContainer>
         </xtce:MetaCommand>

@@ -64,7 +64,7 @@ FALSE                                   ! Echo to stdout
 1                                       ! Number of TX prefixes
 "SC"                                    ! Prefix 0
 **********************************  Thruster IPC  ****************************
-RX                                      ! IPC Mode (OFF,TX,RX,TXRX,ACS,WRITEFILE,READFILE)
+OFF                                     ! IPC Mode (OFF,TX,RX,TXRX,ACS,WRITEFILE,READFILE)
 "Thruster.Rx"                           ! File name for WRITE or READ
 SERVER                                  ! Socket Role (SERVER,CLIENT,GMSEC_CLIENT)
 fortytwo       4280                     ! Server Host Name, Port 

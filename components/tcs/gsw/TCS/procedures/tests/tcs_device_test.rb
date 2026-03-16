@@ -20,7 +20,7 @@ TCS_TEST_LOOP_COUNT.times do |n|
     # Manually command to disable when already disabled
     cmd_cnt = tlm("TCS TCS_HK_TLM CMD_COUNT")
     cmd_err_cnt = tlm("TCS TCS_HK_TLM CMD_ERR_COUNT")
-    cmd("TCS TCS_DISABLE_CC")
+    cmd("TCS HEATER_DISABLE")
     get_tcs_hk()
     check("TCS TCS_HK_TLM CMD_COUNT == #{cmd_cnt}")
     check("TCS TCS_HK_TLM CMD_ERR_COUNT == #{cmd_err_cnt+1}")
@@ -34,7 +34,7 @@ TCS_TEST_LOOP_COUNT.times do |n|
     # Manually command to enable when already enabled
     cmd_cnt = tlm("TCS TCS_HK_TLM CMD_COUNT")
     cmd_err_cnt = tlm("TCS TCS_HK_TLM CMD_ERR_COUNT")
-    cmd("TCS TCS_ENABLE_CC")
+    cmd("TCS HEATER_ENABLE")
     get_tcs_hk()
     check("TCS TCS_HK_TLM CMD_COUNT == #{cmd_cnt}")
     check("TCS TCS_HK_TLM CMD_ERR_COUNT == #{cmd_err_cnt+1}")
