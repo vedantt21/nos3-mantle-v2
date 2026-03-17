@@ -360,6 +360,7 @@ void Test_TCS_ProcessGroundCommand(void)
         CFE_SB_Buffer_t     SBBuf;
         TCS_NoArgs_cmd_t Noop;
         TCS_NoArgs_cmd_t Reset;
+        TCS_NoArgs_cmd_t HeaterEnable;
         TCS_NoArgs_cmd_t Enable;
         TCS_NoArgs_cmd_t Disable;
         TCS_Config_cmd_t Config;
@@ -421,16 +422,43 @@ void Test_TCS_ProcessGroundCommand(void)
     TCS_ProcessGroundCommand();
     UtAssert_True(EventTest.MatchCount == 1, "TCS_LEN_ERR_EID generated (%u)", (unsigned int)EventTest.MatchCount);
 
-    /* test dispatch of ENABLE */
-    FcnCode = TCS_ENABLE_CC;
-    Size    = sizeof(TestMsg.Enable);
+    /* test dispatch of HEATER ENABLE */
+    FcnCode = TCS_HEATER_ENABLE_CC;
+    Size    = sizeof(TestMsg.HeaterEnable);
+    TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
     UT_SetDataBuffer(UT_KEY(CFE_MSG_GetMsgId), &TestMsgId, sizeof(TestMsgId), false);
     UT_SetDataBuffer(UT_KEY(CFE_MSG_GetFcnCode), &FcnCode, sizeof(FcnCode), false);
     UT_SetDataBuffer(UT_KEY(CFE_MSG_GetSize), &Size, sizeof(Size), false);
-    UT_CheckEvent_Setup(&EventTest, TCS_CMD_ENABLE_INF_EID, NULL);
+    UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_SUCCESS);
+    UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 2, OS_SUCCESS);
+    UT_CheckEvent_Setup(&EventTest, TCS_HEATER_ENABLE_INF_EID, NULL);
     TCS_ProcessGroundCommand();
-    // UtAssert_True(EventTest.MatchCount == 1, "TCS_CMD_ENABLE_INF_EID generated (%u)",
-    //               (unsigned int)EventTest.MatchCount);
+    UtAssert_True(EventTest.MatchCount == 1, "TCS_HEATER_ENABLE_INF_EID generated (%u)",
+                  (unsigned int)EventTest.MatchCount);
+    /* test failure of command length */
+    FcnCode = TCS_HEATER_ENABLE_CC;
+    Size    = sizeof(TestMsg.Config);
+    UT_SetDataBuffer(UT_KEY(CFE_MSG_GetMsgId), &TestMsgId, sizeof(TestMsgId), false);
+    UT_SetDataBuffer(UT_KEY(CFE_MSG_GetFcnCode), &FcnCode, sizeof(FcnCode), false);
+    UT_SetDataBuffer(UT_KEY(CFE_MSG_GetSize), &Size, sizeof(Size), false);
+    UT_SetDataBuffer(UT_KEY(CFE_MSG_GetMsgId), &TestMsgId, sizeof(TestMsgId), false);
+    UT_SetDataBuffer(UT_KEY(CFE_MSG_GetFcnCode), &FcnCode, sizeof(FcnCode), false);
+    UT_CheckEvent_Setup(&EventTest, TCS_LEN_ERR_EID, NULL);
+    TCS_ProcessGroundCommand();
+    UtAssert_True(EventTest.MatchCount == 1, "TCS_LEN_ERR_EID generated (%u)", (unsigned int)EventTest.MatchCount);
+
+    /* test dispatch of ENABLE */
+    FcnCode = TCS_ENABLE_CC;
+    Size    = sizeof(TestMsg.Enable);
+    TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_DISABLED;
+    UT_SetDataBuffer(UT_KEY(CFE_MSG_GetMsgId), &TestMsgId, sizeof(TestMsgId), false);
+    UT_SetDataBuffer(UT_KEY(CFE_MSG_GetFcnCode), &FcnCode, sizeof(FcnCode), false);
+    UT_SetDataBuffer(UT_KEY(CFE_MSG_GetSize), &Size, sizeof(Size), false);
+    UT_SetDeferredRetcode(UT_KEY(uart_init_port), 1, OS_SUCCESS);
+    UT_CheckEvent_Setup(&EventTest, TCS_ENABLE_INF_EID, NULL);
+    TCS_ProcessGroundCommand();
+    UtAssert_True(EventTest.MatchCount == 1, "TCS_ENABLE_INF_EID generated (%u)",
+                  (unsigned int)EventTest.MatchCount);
     /* test failure of command length */
     FcnCode = TCS_ENABLE_CC;
     Size    = sizeof(TestMsg.Config);
@@ -635,10 +663,8 @@ void Test_TCS_Enable(void)
     UT_CheckEvent_Setup(&EventTest, TCS_ENABLE_INF_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_DISABLED;
     UT_SetDeferredRetcode(UT_KEY(uart_init_port), 1, OS_SUCCESS);
-    UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_SUCCESS);
-    UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 2, OS_SUCCESS);
     TCS_Enable();
-    UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater enabled (%u)", (unsigned int)EventTest.MatchCount);
+    UtAssert_True(EventTest.MatchCount == 1, "TCS: Device enabled (%u)", (unsigned int)EventTest.MatchCount);
 
     UT_CheckEvent_Setup(&EventTest, TCS_UART_INIT_ERR_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_DISABLED;
@@ -649,16 +675,32 @@ void Test_TCS_Enable(void)
 
     UT_CheckEvent_Setup(&EventTest, TCS_ENABLE_INF_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
+    TCS_Enable();
+    UtAssert_True(EventTest.MatchCount == 1, "TCS: Device enable while already enabled (%u)",
+                  (unsigned int)EventTest.MatchCount);
+}
+
+void Test_TCS_HeaterEnable(void)
+{
+    UT_CheckEvent_t EventTest;
+
+    UT_CheckEvent_Setup(&EventTest, TCS_HEATER_ENABLE_INF_EID, NULL);
+    TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
     UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_SUCCESS);
     UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 2, OS_SUCCESS);
-    TCS_Enable();
-    UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater enable while already enabled (%u)",
+    TCS_HeaterEnable();
+    UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater enabled (%u)", (unsigned int)EventTest.MatchCount);
+
+    UT_CheckEvent_Setup(&EventTest, TCS_HEATER_ENABLE_ERR_EID, NULL);
+    TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_DISABLED;
+    TCS_HeaterEnable();
+    UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater enable rejected while disabled (%u)",
                   (unsigned int)EventTest.MatchCount);
 
-    UT_CheckEvent_Setup(&EventTest, TCS_ENABLE_ERR_EID, NULL);
+    UT_CheckEvent_Setup(&EventTest, TCS_HEATER_ENABLE_ERR_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
     UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_ERROR);
-    TCS_Enable();
+    TCS_HeaterEnable();
     UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater enable command failure (%u)",
                   (unsigned int)EventTest.MatchCount);
 }
@@ -715,5 +757,6 @@ void UtTest_Setup(void)
     ADD_TEST(TCS_ProcessTelemetryRequest);
     ADD_TEST(TCS_Configure);
     ADD_TEST(TCS_Enable);
+    ADD_TEST(TCS_HeaterEnable);
     ADD_TEST(TCS_Disable);
 }

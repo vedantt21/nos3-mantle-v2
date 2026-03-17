@@ -29,6 +29,8 @@
 #define TCS_CMD_DISABLE_INF_EID 16
 #define TCS_DISABLE_INF_EID     17
 #define TCS_DISABLE_ERR_EID     18
+#define TCS_HEATER_ENABLE_INF_EID 24
+#define TCS_HEATER_ENABLE_ERR_EID 25
 
 /* Device specific command event IDs */
 #define TCS_CMD_CONFIG_EN_ERR_EID  20

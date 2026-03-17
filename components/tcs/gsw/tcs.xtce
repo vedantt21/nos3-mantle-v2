@@ -224,6 +224,18 @@
             <xtce:EntryList/>
           </xtce:CommandContainer>
         </xtce:MetaCommand>
+        <xtce:MetaCommand name="TCS_ENABLE">
+          <xtce:BaseMetaCommand metaCommandRef="/CCSDS/CCSDS_TC">
+            <xtce:ArgumentAssignmentList>
+              <xtce:ArgumentAssignment argumentName="CCSDS_STREAMID" argumentValue="6394"/>
+              <xtce:ArgumentAssignment argumentName="CCSDS_FC" argumentValue="5"/>
+            </xtce:ArgumentAssignmentList>
+          </xtce:BaseMetaCommand>
+          <xtce:ArgumentList/>
+          <xtce:CommandContainer name="TCS_TCS_ENABLE_CommandContainer">
+            <xtce:EntryList/>
+          </xtce:CommandContainer>
+        </xtce:MetaCommand>
         <xtce:MetaCommand name="TCS_RST_COUNTERS_CC">
           <xtce:BaseMetaCommand metaCommandRef="/CCSDS/CCSDS_TC">
             <xtce:ArgumentAssignmentList>

@@ -17,6 +17,14 @@ TCS_TEST_LOOP_COUNT.times do |n|
     # Get to known state
     safe_tcs()
 
+    # Manually command heater enable when communications are disabled
+    cmd_cnt = tlm("TCS TCS_HK_TLM CMD_COUNT")
+    cmd_err_cnt = tlm("TCS TCS_HK_TLM CMD_ERR_COUNT")
+    cmd("TCS HEATER_ENABLE")
+    get_tcs_hk()
+    check("TCS TCS_HK_TLM CMD_COUNT == #{cmd_cnt}")
+    check("TCS TCS_HK_TLM CMD_ERR_COUNT == #{cmd_err_cnt+1}")
+
     # Manually command to disable when already disabled
     cmd_cnt = tlm("TCS TCS_HK_TLM CMD_COUNT")
     cmd_err_cnt = tlm("TCS TCS_HK_TLM CMD_ERR_COUNT")
@@ -25,15 +33,17 @@ TCS_TEST_LOOP_COUNT.times do |n|
     check("TCS TCS_HK_TLM CMD_COUNT == #{cmd_cnt}")
     check("TCS TCS_HK_TLM CMD_ERR_COUNT == #{cmd_err_cnt+1}")
 
-    # Enable
+    # Enable TCS communications
     enable_tcs()
+    confirm_tcs_data()
 
-    # Confirm the enable command forces the heater on in manual mode
+    # Command the heater on after TCS communications are enabled
+    enable_heater()
     confirm_tcs_data(nil, "ON", "MANUAL")
     sleep(1.1)
     confirm_tcs_data(21, "ON", "MANUAL")
 
-    # Manually command to enable when already enabled
+    # Manually command heater enable when the heater is already on
     cmd_cnt = tlm("TCS TCS_HK_TLM CMD_COUNT")
     cmd_err_cnt = tlm("TCS TCS_HK_TLM CMD_ERR_COUNT")
     cmd("TCS HEATER_ENABLE")

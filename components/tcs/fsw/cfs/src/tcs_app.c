@@ -325,6 +325,19 @@ void TCS_ProcessGroundCommand(void)
             break;
 
         /*
+        ** Heater Enable Command
+        */
+        case TCS_HEATER_ENABLE_CC:
+            if (TCS_VerifyCmdLength(TCS_AppData.MsgPtr, sizeof(TCS_NoArgs_cmd_t)) == OS_SUCCESS)
+            {
+#ifdef TCS_CFG_DEBUG
+                OS_printf("TCS: TCS_HEATER_ENABLE_CC received \n");
+#endif
+                TCS_HeaterEnable();
+            }
+            break;
+
+        /*
         ** Enable Command
         */
         case TCS_ENABLE_CC:
@@ -549,25 +562,52 @@ static int32 TCS_SetThermalControl(uint8_t control_mode, uint8_t heater_state)
 }
 
 /*
-** Enable Component
-** TODO: Edit for your specific component implementation
+** Enable Heater
+*/
+void TCS_HeaterEnable(void)
+{
+    int32 device_status = OS_SUCCESS;
+
+    if (TCS_AppData.HkTelemetryPkt.DeviceEnabled != TCS_DEVICE_ENABLED)
+    {
+        TCS_AppData.HkTelemetryPkt.CommandErrorCount++;
+
+        CFE_EVS_SendEvent(TCS_HEATER_ENABLE_ERR_EID, CFE_EVS_EventType_ERROR,
+                          "TCS: Heater enable failed, device disabled");
+        return;
+    }
+
+    TCS_AppData.HkTelemetryPkt.CommandCount++;
+
+    device_status = TCS_SetThermalControl(TCS_CONTROL_MODE_MANUAL, TCS_HEATER_STATE_ON);
+    if (device_status == OS_SUCCESS)
+    {
+        TCS_AppData.HkTelemetryPkt.DeviceCount++;
+
+        CFE_EVS_SendEvent(TCS_HEATER_ENABLE_INF_EID, CFE_EVS_EventType_INFORMATION,
+                          "TCS: Heater enabled successfully");
+    }
+    else
+    {
+        TCS_AppData.HkTelemetryPkt.DeviceErrorCount++;
+
+        CFE_EVS_SendEvent(TCS_HEATER_ENABLE_ERR_EID, CFE_EVS_EventType_ERROR,
+                          "TCS: Heater enable command failed, status %d", device_status);
+    }
+    return;
+}
+
+/*
+** Enable Component Communications
 */
 void TCS_Enable(void)
 {
-    int32 status        = OS_SUCCESS;
-    int32 device_status = OS_SUCCESS;
-    uint8 was_disabled  = (TCS_AppData.HkTelemetryPkt.DeviceEnabled == TCS_DEVICE_DISABLED);
+    int32 status = OS_SUCCESS;
 
-    /* Increment command success counter */
     TCS_AppData.HkTelemetryPkt.CommandCount++;
 
-    if (was_disabled != 0)
+    if (TCS_AppData.HkTelemetryPkt.DeviceEnabled != TCS_DEVICE_ENABLED)
     {
-        /*
-        ** Do the action, initialize hardware interface and set enabled
-        ** TODO: Make specific to your application depending on protocol in use
-        ** Note that other components provide examples for the different protocols
-        */
         TCS_AppData.TcsUart.deviceString  = TCS_CFG_STRING;
         TCS_AppData.TcsUart.handle        = TCS_CFG_HANDLE;
         TCS_AppData.TcsUart.isOpen        = PORT_CLOSED;
@@ -589,21 +629,8 @@ void TCS_Enable(void)
         }
     }
 
-    device_status = TCS_SetThermalControl(TCS_CONTROL_MODE_MANUAL, TCS_HEATER_STATE_ON);
-    if (device_status == OS_SUCCESS)
-    {
-        TCS_AppData.HkTelemetryPkt.DeviceCount++;
-
-        CFE_EVS_SendEvent(TCS_ENABLE_INF_EID, CFE_EVS_EventType_INFORMATION,
-                          "TCS: Heater enabled successfully");
-    }
-    else
-    {
-        TCS_AppData.HkTelemetryPkt.DeviceErrorCount++;
-
-        CFE_EVS_SendEvent(TCS_ENABLE_ERR_EID, CFE_EVS_EventType_ERROR,
-                          "TCS: Heater enable command failed, status %d", device_status);
-    }
+    CFE_EVS_SendEvent(TCS_ENABLE_INF_EID, CFE_EVS_EventType_INFORMATION,
+                      "TCS: Device enabled successfully");
     return;
 }
 
