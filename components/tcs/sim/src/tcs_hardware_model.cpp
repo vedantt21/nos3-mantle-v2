@@ -7,13 +7,15 @@ namespace Nos3
     extern ItcLogger::Logger *sim_logger;
 
     TcsHardwareModel::TcsHardwareModel(const boost::property_tree::ptree& config) : SimIHardwareModel(config), 
-    _enabled(TCS_SIM_SUCCESS), _count(0), _config(0), _status(0)
+    _tcs_dp(nullptr), _enabled(TCS_SIM_SUCCESS), _count(0), _config(0), _status(0)
     {
+        reset_thermal_state();
+
         /* Get the NOS engine connection string */
         std::string connection_string = config.get("common.nos-connection-string", "tcp://127.0.0.1:12001"); 
         sim_logger->info("TcsHardwareModel::TcsHardwareModel:  NOS Engine connection string: %s.", connection_string.c_str());
 
-        /* Get a data provider */
+        /* Keep the standard data-provider lifecycle even though thermal state is device-owned. */
         std::string dp_name = config.get("simulator.hardware-model.data-provider.type", "TCS_PROVIDER");
         _tcs_dp = SimDataProviderFactory::Instance().Create(dp_name, config);
         sim_logger->info("TcsHardwareModel::TcsHardwareModel:  Data provider %s created.", dp_name.c_str());
@@ -95,7 +97,7 @@ namespace Nos3
         boost::to_upper(command);
         if (command.compare("HELP") == 0) 
         {
-            response = "TcsHardwareModel::command_callback: Valid commands are HELP, ENABLE, DISABLE, STATUS=X, or STOP";
+            response = "TcsHardwareModel::command_callback: Valid commands are HELP, ENABLE, DISABLE, STATUS=X, MODE=AUTO, MODE=MANUAL, HEATER=ON, HEATER=OFF, or STOP";
         }
         else if (command.compare(0,6,"ENABLE") == 0) 
         {
@@ -108,6 +110,7 @@ namespace Nos3
             _count = 0;
             _config = 0;
             _status = 0;
+            reset_thermal_state();
             response = "TcsHardwareModel::command_callback:  Disabled";
         }
         else if (command.substr(0,7).compare("STATUS=") == 0)
@@ -122,6 +125,40 @@ namespace Nos3
                 response = "TcsHardwareModel::command_callback:  Status invalid";
             }            
         }
+        else if (command.compare("MODE=AUTO") == 0)
+        {
+            _control_mode = TCS_CONTROL_MODE_AUTO;
+            response = "TcsHardwareModel::command_callback:  Control mode set to AUTO";
+        }
+        else if (command.compare("MODE=MANUAL") == 0)
+        {
+            _control_mode = TCS_CONTROL_MODE_MANUAL;
+            response = "TcsHardwareModel::command_callback:  Control mode set to MANUAL";
+        }
+        else if (command.compare("HEATER=ON") == 0)
+        {
+            if (_control_mode == TCS_CONTROL_MODE_MANUAL)
+            {
+                _heater_state = TCS_HEATER_STATE_ON;
+                response = "TcsHardwareModel::command_callback:  Heater set to ON";
+            }
+            else
+            {
+                response = "TcsHardwareModel::command_callback:  Heater command rejected in AUTO mode";
+            }
+        }
+        else if (command.compare("HEATER=OFF") == 0)
+        {
+            if (_control_mode == TCS_CONTROL_MODE_MANUAL)
+            {
+                _heater_state = TCS_HEATER_STATE_OFF;
+                response = "TcsHardwareModel::command_callback:  Heater set to OFF";
+            }
+            else
+            {
+                response = "TcsHardwareModel::command_callback:  Heater command rejected in AUTO mode";
+            }
+        }
         else if (command.compare(0,4,"STOP") == 0) 
         {
             _keep_running = false;
@@ -132,6 +169,51 @@ namespace Nos3
         /* Send a reply */
         sim_logger->info("TcsHardwareModel::command_callback:  Sending reply: %s", response.c_str());
         _command_node->send_reply_message_async(msg, response.size(), response.c_str());
+    }
+
+
+    void TcsHardwareModel::reset_thermal_state(void)
+    {
+        _ambient_temperature_c = TCS_AMBIENT_TEMPERATURE_C;
+        _current_temperature_c = TCS_INITIAL_TEMPERATURE_C;
+        _lower_threshold_c     = TCS_LOWER_THRESHOLD_C;
+        _upper_threshold_c     = TCS_UPPER_THRESHOLD_C;
+        _heater_state          = TCS_HEATER_STATE_OFF;
+        _control_mode          = TCS_CONTROL_MODE_AUTO;
+    }
+
+
+    void TcsHardwareModel::update_thermal_state(void)
+    {
+        if (_control_mode == TCS_CONTROL_MODE_AUTO)
+        {
+            if (_current_temperature_c <= _lower_threshold_c)
+            {
+                _heater_state = TCS_HEATER_STATE_ON;
+            }
+            else if (_current_temperature_c >= _upper_threshold_c)
+            {
+                _heater_state = TCS_HEATER_STATE_OFF;
+            }
+        }
+
+        if (_heater_state == TCS_HEATER_STATE_ON)
+        {
+            _current_temperature_c++;
+        }
+        else
+        {
+            _current_temperature_c--;
+        }
+
+        if (_current_temperature_c < _ambient_temperature_c)
+        {
+            _current_temperature_c = _ambient_temperature_c;
+        }
+        else if (_current_temperature_c > _upper_threshold_c)
+        {
+            _current_temperature_c = _upper_threshold_c;
+        }
     }
 
 
@@ -172,10 +254,14 @@ namespace Nos3
     /* Custom function to prepare the Tcs Data */
     void TcsHardwareModel::create_tcs_data(std::vector<uint8_t>& out_data)
     {
-        boost::shared_ptr<TcsDataPoint> data_point = boost::dynamic_pointer_cast<TcsDataPoint>(_tcs_dp->get_data_point());
+        update_thermal_state();
+        std::uint16_t current_temperature = static_cast<std::uint16_t>(_current_temperature_c);
+        std::uint16_t lower_threshold     = static_cast<std::uint16_t>(_lower_threshold_c);
+        std::uint16_t upper_threshold     = static_cast<std::uint16_t>(_upper_threshold_c);
+        std::uint16_t ambient_temperature = static_cast<std::uint16_t>(_ambient_temperature_c);
 
         /* Prepare data size */
-        out_data.resize(14, 0x00);
+        out_data.resize(18, 0x00);
 
         /* Streaming data header - 0xDEAD */
         out_data[0] = 0xDE;
@@ -187,35 +273,24 @@ namespace Nos3
         out_data[4] = (_count >>  8) & 0x000000FF; 
         out_data[5] =  _count & 0x000000FF;
         
-        /* 
-        ** Payload 
-        ** 
-        ** Device is big engian (most significant byte first)
-        ** Assuming data is valid regardless of dynamic / environmental data
-        ** Floating poing numbers are extremely problematic 
-        **   (https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html)
-        ** Most hardware transmits some type of unsigned integer (e.g. from an ADC), so that's what we've done
-        ** Scale each of the x, y, z (which are in the range [-1.0, 1.0]) by 32767, 
-        **   and add 32768 so that the result fits in a uint16
-        */
-        double dx = data_point->get_tcs_data_x();
-        double dy = data_point->get_tcs_data_y();
-        double dz = data_point->get_tcs_data_z();
-        uint16_t x   = (uint16_t)(dx*32767.0 + 32768.0);
-        out_data[6]  = (x >> 8) & 0x00FF;
-        out_data[7]  =  x       & 0x00FF;
-        uint16_t y   = (uint16_t)(dy*32767.0 + 32768.0);
-        out_data[8]  = (y >> 8) & 0x00FF;
-        out_data[9]  =  y       & 0x00FF;
-        uint16_t z   = (uint16_t)(dz*32767.0 + 32768.0);
-        out_data[10] = (z >> 8) & 0x00FF;
-        out_data[11] =  z       & 0x00FF;
+        /* Thermal payload is transmitted big-endian on the device UART link. */
+        out_data[6]  = (current_temperature >> 8) & 0x00FF;
+        out_data[7]  = current_temperature & 0x00FF;
+        out_data[8]  = (lower_threshold >> 8) & 0x00FF;
+        out_data[9]  = lower_threshold & 0x00FF;
+        out_data[10] = (upper_threshold >> 8) & 0x00FF;
+        out_data[11] = upper_threshold & 0x00FF;
+        out_data[12] = _heater_state;
+        out_data[13] = _control_mode;
+        out_data[14] = (ambient_temperature >> 8) & 0x00FF;
+        out_data[15] = ambient_temperature & 0x00FF;
 
-        sim_logger->debug("TcsHardwareModel::create_tcs_data: data_point=%f, %f, %f, converted values=%u, %u, %u.", dx, dy, dz, x, y, z);
+        sim_logger->debug("TcsHardwareModel::create_tcs_data: current=%dC lower=%dC upper=%dC heater=%u mode=%u ambient=%dC.",
+            _current_temperature_c, _lower_threshold_c, _upper_threshold_c, _heater_state, _control_mode, _ambient_temperature_c);
 
         /* Streaming data trailer - 0xBEEF */
-        out_data[12] = 0xBE;
-        out_data[13] = 0xEF;
+        out_data[16] = 0xBE;
+        out_data[17] = 0xEF;
     }
 
 

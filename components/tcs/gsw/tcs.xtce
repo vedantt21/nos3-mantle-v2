@@ -6,29 +6,62 @@
         <xtce:IntegerParameterType name="DEVICE_COUNTER_Type" shortDescription="Reported Device Command Counter" signed="false">
           <xtce:IntegerDataEncoding sizeInBits="32" encoding="unsigned" byteOrder="leastSignificantByteFirst"/>
         </xtce:IntegerParameterType>
-        <xtce:IntegerParameterType name="RAW_TCS_X_Type" shortDescription="Raw tcs data x component (1-65535)" signed="false">
+        <xtce:IntegerParameterType name="CURRENT_TEMPERATURE_Type" shortDescription="Current temperature (C)" signed="true">
+          <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
+        </xtce:IntegerParameterType>
+        <xtce:IntegerParameterType name="LOWER_THRESHOLD_Type" shortDescription="Lower heater control threshold (C)" signed="true">
+          <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
+        </xtce:IntegerParameterType>
+        <xtce:IntegerParameterType name="UPPER_THRESHOLD_Type" shortDescription="Upper heater control threshold (C)" signed="true">
+          <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
+        </xtce:IntegerParameterType>
+        <xtce:EnumeratedParameterType name="HEATER_STATE_Type" shortDescription="Heater state">
+          <xtce:IntegerDataEncoding sizeInBits="8" encoding="unsigned"/>
+          <xtce:EnumerationList>
+            <xtce:Enumeration value="0" label="OFF"/>
+            <xtce:Enumeration value="1" label="ON"/>
+          </xtce:EnumerationList>
+        </xtce:EnumeratedParameterType>
+        <xtce:EnumeratedParameterType name="CONTROL_MODE_Type" shortDescription="Thermal control mode">
+          <xtce:IntegerDataEncoding sizeInBits="8" encoding="unsigned"/>
+          <xtce:EnumerationList>
+            <xtce:Enumeration value="0" label="MANUAL"/>
+            <xtce:Enumeration value="1" label="AUTO"/>
+          </xtce:EnumerationList>
+        </xtce:EnumeratedParameterType>
+        <xtce:IntegerParameterType name="AMBIENT_TEMPERATURE_Type" shortDescription="Ambient temperature (C)" signed="true">
+          <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
+        </xtce:IntegerParameterType>
+        <xtce:IntegerParameterType name="PASS_NUMBER_Type" shortDescription="Science Pass Number" signed="false">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="unsigned" byteOrder="leastSignificantByteFirst"/>
         </xtce:IntegerParameterType>
-        <xtce:IntegerParameterType name="RAW_TCS_Y_Type" shortDescription="Raw tcs data y component (1-65535)" signed="false">
-          <xtce:IntegerDataEncoding sizeInBits="16" encoding="unsigned" byteOrder="leastSignificantByteFirst"/>
-        </xtce:IntegerParameterType>
-        <xtce:IntegerParameterType name="RAW_TCS_Z_Type" shortDescription="Raw tcs data z component (1-65535)" signed="false">
-          <xtce:IntegerDataEncoding sizeInBits="16" encoding="unsigned" byteOrder="leastSignificantByteFirst"/>
+        <xtce:IntegerParameterType name="REGION_STATUS_Type" shortDescription="Science Region / Status" signed="false">
+          <xtce:IntegerDataEncoding sizeInBits="8" encoding="unsigned"/>
         </xtce:IntegerParameterType>
       </xtce:ParameterTypeSet>
       <xtce:ParameterSet>
         <xtce:Parameter name="DEVICE_COUNTER" parameterTypeRef="DEVICE_COUNTER_Type"/>
-        <xtce:Parameter name="RAW_TCS_X" parameterTypeRef="RAW_TCS_X_Type"/>
-        <xtce:Parameter name="RAW_TCS_Y" parameterTypeRef="RAW_TCS_Y_Type"/>
-        <xtce:Parameter name="RAW_TCS_Z" parameterTypeRef="RAW_TCS_Z_Type"/>
+        <xtce:Parameter name="CURRENT_TEMPERATURE" parameterTypeRef="CURRENT_TEMPERATURE_Type"/>
+        <xtce:Parameter name="LOWER_THRESHOLD" parameterTypeRef="LOWER_THRESHOLD_Type"/>
+        <xtce:Parameter name="UPPER_THRESHOLD" parameterTypeRef="UPPER_THRESHOLD_Type"/>
+        <xtce:Parameter name="HEATER_STATE" parameterTypeRef="HEATER_STATE_Type"/>
+        <xtce:Parameter name="CONTROL_MODE" parameterTypeRef="CONTROL_MODE_Type"/>
+        <xtce:Parameter name="AMBIENT_TEMPERATURE" parameterTypeRef="AMBIENT_TEMPERATURE_Type"/>
+        <xtce:Parameter name="PASS_NUMBER" parameterTypeRef="PASS_NUMBER_Type"/>
+        <xtce:Parameter name="REGION_STATUS" parameterTypeRef="REGION_STATUS_Type"/>
       </xtce:ParameterSet>
       <xtce:ContainerSet>
         <xtce:SequenceContainer name="TCS_DATA_TLM" shortDescription="TCS_Device_tlm_t">
           <xtce:EntryList>
             <xtce:ParameterRefEntry parameterRef="DEVICE_COUNTER"/>
-            <xtce:ParameterRefEntry parameterRef="RAW_TCS_X"/>
-            <xtce:ParameterRefEntry parameterRef="RAW_TCS_Y"/>
-            <xtce:ParameterRefEntry parameterRef="RAW_TCS_Z"/>
+            <xtce:ParameterRefEntry parameterRef="CURRENT_TEMPERATURE"/>
+            <xtce:ParameterRefEntry parameterRef="LOWER_THRESHOLD"/>
+            <xtce:ParameterRefEntry parameterRef="UPPER_THRESHOLD"/>
+            <xtce:ParameterRefEntry parameterRef="HEATER_STATE"/>
+            <xtce:ParameterRefEntry parameterRef="CONTROL_MODE"/>
+            <xtce:ParameterRefEntry parameterRef="AMBIENT_TEMPERATURE"/>
+            <xtce:ParameterRefEntry parameterRef="PASS_NUMBER"/>
+            <xtce:ParameterRefEntry parameterRef="REGION_STATUS"/>
           </xtce:EntryList>
           <xtce:BaseContainer containerRef="/CCSDS/CCSDS_TM">
             <xtce:RestrictionCriteria>

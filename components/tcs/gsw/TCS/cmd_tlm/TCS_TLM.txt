@@ -26,21 +26,16 @@ TELEMETRY TCS TCS_DATA_TLM <%= CosmosCfsConfig::PROCESSOR_ENDIAN %> "TCS_Device_
   APPEND_ITEM    CCSDS_SPARE          32 UINT         ""
   # TCS_Device_Data_tlm_t
   APPEND_ITEM    DEVICE_COUNTER       32 UINT         "Reported Device Command Counter"
-  APPEND_ITEM    RAW_TCS_X         16 UINT         "Raw tcs data x component (1-65535)"
-  APPEND_ITEM    RAW_TCS_Y         16 UINT         "Raw tcs data y component (1-65535)"
-  APPEND_ITEM    RAW_TCS_Z         16 UINT         "Raw tcs data z component (1-65535)"
-  APPEND_ITEM    TCS_X              0 DERIVED      "Tcs data unit vector x component (-1.0 to 1.0)"
-    GENERIC_READ_CONVERSION_START FLOAT 32
-      (packet.read("RAW_TCS_X") - 32768.0)/32767.0
-    GENERIC_READ_CONVERSION_END
-  APPEND_ITEM    TCS_Y              0 DERIVED      "Tcs data unit vector y component (-1.0 to 1.0)"
-    GENERIC_READ_CONVERSION_START FLOAT 32
-      (packet.read("RAW_TCS_Y") - 32768.0)/32767.0
-    GENERIC_READ_CONVERSION_END
-  APPEND_ITEM    TCS_Z              0 DERIVED      "Tcs data unit vector z component (-1.0 to 1.0)"
-    GENERIC_READ_CONVERSION_START FLOAT 32
-      (packet.read("RAW_TCS_Z") - 32768.0)/32767.0
-    GENERIC_READ_CONVERSION_END
+  APPEND_ITEM    CURRENT_TEMPERATURE 16 INT          "Current temperature (C)"
+  APPEND_ITEM    LOWER_THRESHOLD     16 INT          "Lower heater control threshold (C)"
+  APPEND_ITEM    UPPER_THRESHOLD     16 INT          "Upper heater control threshold (C)"
+  APPEND_ITEM    HEATER_STATE         8 UINT         "Heater state"
+    STATE OFF 0
+    STATE ON  1
+  APPEND_ITEM    CONTROL_MODE         8 UINT         "Thermal control mode"
+    STATE MANUAL 0
+    STATE AUTO   1
+  APPEND_ITEM    AMBIENT_TEMPERATURE 16 INT          "Ambient temperature (C)"
 # TODO: This is specific to the tcs application, remove if using template generator
   APPEND_ITEM    PassNumber             16 UINT       "Science Pass Number"
   APPEND_ITEM    RegionStatus            8 UINT       "Science Region / Status"

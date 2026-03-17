@@ -38,6 +38,17 @@
 #define TCS_DEVICE_HDR_TRL_LEN 4
 #define TCS_DEVICE_CMD_SIZE    9
 
+#define TCS_HEATER_STATE_OFF 0
+#define TCS_HEATER_STATE_ON  1
+
+#define TCS_CONTROL_MODE_MANUAL 0
+#define TCS_CONTROL_MODE_AUTO   1
+
+#define TCS_AMBIENT_TEMPERATURE_C      20
+#define TCS_INITIAL_TEMPERATURE_C      20
+#define TCS_LOWER_THRESHOLD_C          0
+#define TCS_UPPER_THRESHOLD_C          50
+
 /*
 ** TCS device housekeeping telemetry definition
 */
@@ -57,9 +68,12 @@ typedef struct
 typedef struct
 {
     uint32_t DeviceCounter;
-    uint16_t DeviceDataX;
-    uint16_t DeviceDataY;
-    uint16_t DeviceDataZ;
+    int16_t  CurrentTemperatureC;
+    int16_t  LowerThresholdC;
+    int16_t  UpperThresholdC;
+    uint8_t  HeaterState;
+    uint8_t  ControlMode;
+    int16_t  AmbientTemperatureC;
 
 } __attribute__((packed)) TCS_Device_Data_tlm_t;
 #define TCS_DEVICE_DATA_LNGTH sizeof(TCS_Device_Data_tlm_t)

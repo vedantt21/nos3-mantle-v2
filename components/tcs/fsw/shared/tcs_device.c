@@ -223,30 +223,40 @@ int32_t TCS_RequestData(uart_info_t *device, TCS_Device_Data_tlm_t *data)
 
             /* Verify data header and trailer */
             if ((read_data[0] == TCS_DEVICE_HDR_0) && (read_data[1] == TCS_DEVICE_HDR_1) &&
-                (read_data[12] == TCS_DEVICE_TRAILER_0) && (read_data[13] == TCS_DEVICE_TRAILER_1))
+                (read_data[16] == TCS_DEVICE_TRAILER_0) && (read_data[17] == TCS_DEVICE_TRAILER_1))
             {
                 data->DeviceCounter = read_data[2] << 24;
                 data->DeviceCounter |= read_data[3] << 16;
                 data->DeviceCounter |= read_data[4] << 8;
                 data->DeviceCounter |= read_data[5];
 
-                data->DeviceDataX = read_data[6] << 8;
-                data->DeviceDataX |= read_data[7];
+                data->CurrentTemperatureC = (int16_t)((read_data[6] << 8) | read_data[7]);
 
-                data->DeviceDataY = read_data[8] << 8;
-                data->DeviceDataY |= read_data[9];
+                data->LowerThresholdC = (int16_t)((read_data[8] << 8) | read_data[9]);
 
-                data->DeviceDataZ = read_data[10] << 8;
-                data->DeviceDataZ |= read_data[11];
+                data->UpperThresholdC = (int16_t)((read_data[10] << 8) | read_data[11]);
+                data->HeaterState      = read_data[12];
+                data->ControlMode      = read_data[13];
+                data->AmbientTemperatureC = (int16_t)((read_data[14] << 8) | read_data[15]);
 
 #ifdef TCS_CFG_DEBUG
                 OS_printf("  Header  = 0x%02x%02x  \n", read_data[0], read_data[1]);
                 OS_printf("  Counter = 0x%08x, %d  \n", data->DeviceCounter, data->DeviceCounter);
-                OS_printf("  Data X  = 0x%04x, %d  \n", data->DeviceDataX, data->DeviceDataX);
-                OS_printf("  Data Y  = 0x%04x, %d  \n", data->DeviceDataY, data->DeviceDataY);
-                OS_printf("  Data Z  = 0x%04x, %d  \n", data->DeviceDataZ, data->DeviceDataZ);
-                OS_printf("  Trailer = 0x%02x%02x  \n", read_data[12], read_data[13]);
+                OS_printf("  Current Temperature = %d C  \n", (int)data->CurrentTemperatureC);
+                OS_printf("  Lower Threshold     = %d C  \n", (int)data->LowerThresholdC);
+                OS_printf("  Upper Threshold     = %d C  \n", (int)data->UpperThresholdC);
+                OS_printf("  Heater State        = %u    \n", (unsigned int)data->HeaterState);
+                OS_printf("  Control Mode        = %u    \n", (unsigned int)data->ControlMode);
+                OS_printf("  Ambient Temperature = %d C  \n", (int)data->AmbientTemperatureC);
+                OS_printf("  Trailer = 0x%02x%02x  \n", read_data[16], read_data[17]);
 #endif
+            }
+            else
+            {
+#ifdef TCS_CFG_DEBUG
+                OS_printf("  TCS_RequestData: Invalid header or trailer! \n");
+#endif
+                status = OS_ERROR;
             }
         }
         else

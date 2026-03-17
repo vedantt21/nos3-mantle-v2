@@ -59,11 +59,18 @@ void Test_TCS_RequestData(void)
     TCS_Device_Data_tlm_t data;
     TCS_RequestData(&device, &data);
 
-    uint8_t read_data[] = {0xDE, 0xAD, 0x00, 0x00, 0x00, 0x07, 0x00, 0x06,
-                           0x00, 0x0C, 0x00, 0x12, 0x00, 0x00, 0xBE, 0xEF};
-    UT_SetDeferredRetcode(UT_KEY(uart_bytes_available), 1, 16);
-    UT_SetDeferredRetcode(UT_KEY(uart_read_port), 1, 16);
+    uint8_t read_data[] = {0xDE, 0xAD, 0x00, 0x00, 0x00, 0x07, 0x00, 0x14, 0x00,
+                           0x00, 0x00, 0x32, 0x00, 0x01, 0x00, 0x14, 0xBE, 0xEF};
+    UT_SetDeferredRetcode(UT_KEY(uart_bytes_available), 1, 18);
+    UT_SetDeferredRetcode(UT_KEY(uart_read_port), 1, 18);
     UT_SetDataBuffer(UT_KEY(uart_read_port), &read_data, sizeof(read_data), false);
+    TCS_RequestData(&device, &data);
+
+    uint8_t invalid_read_data[] = {0xDE, 0xAD, 0x00, 0x00, 0x00, 0x07, 0x00, 0x14, 0x00,
+                                   0x00, 0x00, 0x32, 0x00, 0x01, 0x00, 0x14, 0x00, 0x00};
+    UT_SetDeferredRetcode(UT_KEY(uart_bytes_available), 1, 18);
+    UT_SetDeferredRetcode(UT_KEY(uart_read_port), 1, 18);
+    UT_SetDataBuffer(UT_KEY(uart_read_port), &invalid_read_data, sizeof(invalid_read_data), false);
     TCS_RequestData(&device, &data);
 
     UT_SetDeferredRetcode(UT_KEY(uart_flush), 1, OS_ERROR);

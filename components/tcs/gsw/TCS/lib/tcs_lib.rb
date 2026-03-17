@@ -72,15 +72,28 @@ def safe_tcs()
     end
 end
 
-def confirm_tcs_data()
+def confirm_tcs_data(expected_current = nil, expected_heater = nil, expected_mode = nil)
     dev_cmd_cnt = tlm("TCS TCS_HK_TLM DEVICE_COUNT")
     dev_cmd_err_cnt = tlm("TCS TCS_HK_TLM DEVICE_ERR_COUNT")
     
     get_tcs_data()
-    # Note these checks assume default simulator configuration
-    raw_x = tlm("TCS TCS_DATA_TLM RAW_TCS_X")
-    check("TCS TCS_DATA_TLM RAW_TCS_Y >= #{raw_x*2}")
-    check("TCS TCS_DATA_TLM RAW_TCS_Z >= #{raw_x*3}")
+    check("TCS TCS_DATA_TLM LOWER_THRESHOLD == 0")
+    check("TCS TCS_DATA_TLM UPPER_THRESHOLD == 50")
+    check("TCS TCS_DATA_TLM AMBIENT_TEMPERATURE == 20")
+    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE >= 20")
+    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE <= 50")
+
+    if (!expected_current.nil?)
+        check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE == #{expected_current}")
+    end
+
+    if (!expected_heater.nil?)
+        check("TCS TCS_DATA_TLM HEATER_STATE == '#{expected_heater}'")
+    end
+
+    if (!expected_mode.nil?)
+        check("TCS TCS_DATA_TLM CONTROL_MODE == '#{expected_mode}'")
+    end
 
     get_tcs_hk()
     check("TCS TCS_HK_TLM DEVICE_COUNT >= #{dev_cmd_cnt}")
@@ -113,6 +126,22 @@ end
 
 def tcs_sim_disable()
     cmd("SIM_CMDBUS_BRIDGE TCS_SIM_DISABLE")
+end
+
+def tcs_sim_mode_auto()
+    cmd("SIM_CMDBUS_BRIDGE TCS_SIM_MODE_AUTO")
+end
+
+def tcs_sim_mode_manual()
+    cmd("SIM_CMDBUS_BRIDGE TCS_SIM_MODE_MANUAL")
+end
+
+def tcs_sim_heater_on()
+    cmd("SIM_CMDBUS_BRIDGE TCS_SIM_HEATER_ON")
+end
+
+def tcs_sim_heater_off()
+    cmd("SIM_CMDBUS_BRIDGE TCS_SIM_HEATER_OFF")
 end
 
 def tcs_sim_set_status(status)
