@@ -7,7 +7,7 @@ namespace Nos3
     extern ItcLogger::Logger *sim_logger;
 
     TcsHardwareModel::TcsHardwareModel(const boost::property_tree::ptree& config) : SimIHardwareModel(config), 
-    _tcs_dp(nullptr), _enabled(TCS_SIM_SUCCESS), _count(0), _config(0), _status(0)
+    _tcs_dp(nullptr), _enabled(TCS_SIM_SUCCESS), _count(0), _config(0), _status(0), _elapsed_microseconds(0)
     {
         reset_thermal_state();
 
@@ -64,6 +64,7 @@ namespace Nos3
             }
         }
         _time_bus.reset(new NosEngine::Client::Bus(_hub, connection_string, time_bus_name));
+        _time_bus->add_time_tick_callback(std::bind(&TcsHardwareModel::time_tick_callback, this));
         sim_logger->info("TcsHardwareModel::TcsHardwareModel:  Now on time bus named %s.", time_bus_name.c_str());
 
         /* Construction complete */
@@ -180,6 +181,23 @@ namespace Nos3
         _upper_threshold_c     = TCS_UPPER_THRESHOLD_C;
         _heater_state          = TCS_HEATER_STATE_OFF;
         _control_mode          = TCS_CONTROL_MODE_AUTO;
+        _elapsed_microseconds  = 0;
+    }
+
+
+    void TcsHardwareModel::time_tick_callback(void)
+    {
+        if (_enabled != TCS_SIM_SUCCESS)
+        {
+            return;
+        }
+
+        _elapsed_microseconds += _sim_microseconds_per_tick;
+        while (_elapsed_microseconds >= 1000000ULL)
+        {
+            update_thermal_state();
+            _elapsed_microseconds -= 1000000ULL;
+        }
     }
 
 
@@ -254,7 +272,6 @@ namespace Nos3
     /* Custom function to prepare the Tcs Data */
     void TcsHardwareModel::create_tcs_data(std::vector<uint8_t>& out_data)
     {
-        update_thermal_state();
         std::uint16_t current_temperature = static_cast<std::uint16_t>(_current_temperature_c);
         std::uint16_t lower_threshold     = static_cast<std::uint16_t>(_lower_threshold_c);
         std::uint16_t upper_threshold     = static_cast<std::uint16_t>(_upper_threshold_c);
@@ -372,6 +389,34 @@ namespace Nos3
                         _config |= in_data[4] << 16;
                         _config |= in_data[5] << 8;
                         _config |= in_data[6];
+                        break;
+
+                    case 4:
+                        /* Set control mode */
+                        if (in_data[6] <= TCS_CONTROL_MODE_AUTO)
+                        {
+                            _control_mode = in_data[6];
+                            sim_logger->debug("TcsHardwareModel::uart_read_callback:  Control mode set to %u.", _control_mode);
+                        }
+                        else
+                        {
+                            valid = TCS_SIM_ERROR;
+                            sim_logger->debug("TcsHardwareModel::uart_read_callback:  Invalid control mode %u received!", in_data[6]);
+                        }
+                        break;
+
+                    case 5:
+                        /* Set heater state */
+                        if (in_data[6] <= TCS_HEATER_STATE_ON)
+                        {
+                            _heater_state = in_data[6];
+                            sim_logger->debug("TcsHardwareModel::uart_read_callback:  Heater state set to %u.", _heater_state);
+                        }
+                        else
+                        {
+                            valid = TCS_SIM_ERROR;
+                            sim_logger->debug("TcsHardwareModel::uart_read_callback:  Invalid heater state %u received!", in_data[6]);
+                        }
                         break;
                     
                     default:

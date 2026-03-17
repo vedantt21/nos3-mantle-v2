@@ -635,8 +635,10 @@ void Test_TCS_Enable(void)
     UT_CheckEvent_Setup(&EventTest, TCS_ENABLE_INF_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_DISABLED;
     UT_SetDeferredRetcode(UT_KEY(uart_init_port), 1, OS_SUCCESS);
+    UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_SUCCESS);
+    UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 2, OS_SUCCESS);
     TCS_Enable();
-    UtAssert_True(EventTest.MatchCount == 1, "TCS: Device enabled (%u)", (unsigned int)EventTest.MatchCount);
+    UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater enabled (%u)", (unsigned int)EventTest.MatchCount);
 
     UT_CheckEvent_Setup(&EventTest, TCS_UART_INIT_ERR_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_DISABLED;
@@ -645,11 +647,19 @@ void Test_TCS_Enable(void)
     UtAssert_True(EventTest.MatchCount == 1, "TCS: UART port initialization error (%u)",
                   (unsigned int)EventTest.MatchCount);
 
+    UT_CheckEvent_Setup(&EventTest, TCS_ENABLE_INF_EID, NULL);
+    TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
+    UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_SUCCESS);
+    UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 2, OS_SUCCESS);
+    TCS_Enable();
+    UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater enable while already enabled (%u)",
+                  (unsigned int)EventTest.MatchCount);
+
     UT_CheckEvent_Setup(&EventTest, TCS_ENABLE_ERR_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
-    UT_SetDeferredRetcode(UT_KEY(uart_init_port), 1, OS_ERROR);
+    UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_ERROR);
     TCS_Enable();
-    UtAssert_True(EventTest.MatchCount == 1, "TCS: Device enable failed, already enabled (%u)",
+    UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater enable command failure (%u)",
                   (unsigned int)EventTest.MatchCount);
 }
 

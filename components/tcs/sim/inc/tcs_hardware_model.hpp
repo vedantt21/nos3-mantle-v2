@@ -52,6 +52,7 @@ namespace Nos3
         void create_tcs_hk(std::vector<uint8_t>& out_data); 
         void create_tcs_data(std::vector<uint8_t>& out_data); 
         void reset_thermal_state(void);
+        void time_tick_callback(void);
         void update_thermal_state(void);
         void uart_read_callback(const uint8_t *buf, size_t len); /* Handle data the hardware receives from its protocol bus */
         void command_callback(NosEngine::Common::Message msg); /* Handle backdoor commands and time tick to the simulator */
@@ -72,6 +73,7 @@ namespace Nos3
         std::int16_t                                        _upper_threshold_c;
         std::uint8_t                                        _heater_state;
         std::uint8_t                                        _control_mode;
+        std::uint64_t                                       _elapsed_microseconds;
     };
 }
 

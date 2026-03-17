@@ -538,20 +538,31 @@ void TCS_ResetCounters(void)
     return;
 }
 
+static int32 TCS_SetThermalControl(uint8_t control_mode, uint8_t heater_state)
+{
+    int32 status = TCS_CommandDevice(&TCS_AppData.TcsUart, TCS_DEVICE_SET_MODE_CMD, control_mode);
+    if (status == OS_SUCCESS)
+    {
+        status = TCS_CommandDevice(&TCS_AppData.TcsUart, TCS_DEVICE_SET_HEATER_CMD, heater_state);
+    }
+    return status;
+}
+
 /*
 ** Enable Component
 ** TODO: Edit for your specific component implementation
 */
 void TCS_Enable(void)
 {
-    int32 status = OS_SUCCESS;
+    int32 status        = OS_SUCCESS;
+    int32 device_status = OS_SUCCESS;
+    uint8 was_disabled  = (TCS_AppData.HkTelemetryPkt.DeviceEnabled == TCS_DEVICE_DISABLED);
 
-    /* Do any necessary checks, confirm that device is currently disabled */
-    if (TCS_AppData.HkTelemetryPkt.DeviceEnabled == TCS_DEVICE_DISABLED)
+    /* Increment command success counter */
+    TCS_AppData.HkTelemetryPkt.CommandCount++;
+
+    if (was_disabled != 0)
     {
-        /* Increment command success counter */
-        TCS_AppData.HkTelemetryPkt.CommandCount++;
-
         /*
         ** Do the action, initialize hardware interface and set enabled
         ** TODO: Make specific to your application depending on protocol in use
@@ -567,32 +578,31 @@ void TCS_Enable(void)
         if (status == OS_SUCCESS)
         {
             TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
-
-            /* Increment device success counter */
             TCS_AppData.HkTelemetryPkt.DeviceCount++;
-
-            /* Send device event success to the console */
-            CFE_EVS_SendEvent(TCS_ENABLE_INF_EID, CFE_EVS_EventType_INFORMATION,
-                              "TCS: Device enabled successfully");
         }
         else
         {
-            /* Increment device error counter */
             TCS_AppData.HkTelemetryPkt.DeviceErrorCount++;
-
-            /* Send device event failure to the console */
             CFE_EVS_SendEvent(TCS_UART_INIT_ERR_EID, CFE_EVS_EventType_ERROR,
                               "TCS: Device UART port initialization error %d", status);
+            return;
         }
+    }
+
+    device_status = TCS_SetThermalControl(TCS_CONTROL_MODE_MANUAL, TCS_HEATER_STATE_ON);
+    if (device_status == OS_SUCCESS)
+    {
+        TCS_AppData.HkTelemetryPkt.DeviceCount++;
+
+        CFE_EVS_SendEvent(TCS_ENABLE_INF_EID, CFE_EVS_EventType_INFORMATION,
+                          "TCS: Heater enabled successfully");
     }
     else
     {
-        /* Increment command error count */
-        TCS_AppData.HkTelemetryPkt.CommandErrorCount++;
+        TCS_AppData.HkTelemetryPkt.DeviceErrorCount++;
 
-        /* Send command event failure to the console */
         CFE_EVS_SendEvent(TCS_ENABLE_ERR_EID, CFE_EVS_EventType_ERROR,
-                          "TCS: Device enable failed, already enabled");
+                          "TCS: Heater enable command failed, status %d", device_status);
     }
     return;
 }
@@ -603,7 +613,8 @@ void TCS_Enable(void)
 */
 void TCS_Disable(void)
 {
-    int32 status = OS_SUCCESS;
+    int32 status        = OS_SUCCESS;
+    int32 device_status = OS_SUCCESS;
 
     /* Do any necessary checks, confirm that device is currently enabled */
     if (TCS_AppData.HkTelemetryPkt.DeviceEnabled == TCS_DEVICE_ENABLED)
@@ -616,6 +627,18 @@ void TCS_Disable(void)
         ** TODO: Make specific to your application depending on protocol in use
         ** Note that other components provide examples for the different protocols
         */
+        device_status = TCS_SetThermalControl(TCS_CONTROL_MODE_MANUAL, TCS_HEATER_STATE_OFF);
+        if (device_status == OS_SUCCESS)
+        {
+            TCS_AppData.HkTelemetryPkt.DeviceCount++;
+        }
+        else
+        {
+            TCS_AppData.HkTelemetryPkt.DeviceErrorCount++;
+            CFE_EVS_SendEvent(TCS_DISABLE_ERR_EID, CFE_EVS_EventType_ERROR,
+                              "TCS: Heater disable command failed, status %d", device_status);
+        }
+
         status = uart_close_port(&TCS_AppData.TcsUart);
         if (status == OS_SUCCESS)
         {

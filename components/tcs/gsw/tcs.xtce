@@ -8,12 +8,21 @@
         </xtce:IntegerParameterType>
         <xtce:IntegerParameterType name="CURRENT_TEMPERATURE_Type" shortDescription="Current temperature (C)" signed="true">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
+          <xtce:UnitSet>
+            <xtce:Unit>C</xtce:Unit>
+          </xtce:UnitSet>
         </xtce:IntegerParameterType>
         <xtce:IntegerParameterType name="LOWER_THRESHOLD_Type" shortDescription="Lower heater control threshold (C)" signed="true">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
+          <xtce:UnitSet>
+            <xtce:Unit>C</xtce:Unit>
+          </xtce:UnitSet>
         </xtce:IntegerParameterType>
         <xtce:IntegerParameterType name="UPPER_THRESHOLD_Type" shortDescription="Upper heater control threshold (C)" signed="true">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
+          <xtce:UnitSet>
+            <xtce:Unit>C</xtce:Unit>
+          </xtce:UnitSet>
         </xtce:IntegerParameterType>
         <xtce:EnumeratedParameterType name="HEATER_STATE_Type" shortDescription="Heater state">
           <xtce:IntegerDataEncoding sizeInBits="8" encoding="unsigned"/>
@@ -31,6 +40,9 @@
         </xtce:EnumeratedParameterType>
         <xtce:IntegerParameterType name="AMBIENT_TEMPERATURE_Type" shortDescription="Ambient temperature (C)" signed="true">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
+          <xtce:UnitSet>
+            <xtce:Unit>C</xtce:Unit>
+          </xtce:UnitSet>
         </xtce:IntegerParameterType>
         <xtce:IntegerParameterType name="PASS_NUMBER_Type" shortDescription="Science Pass Number" signed="false">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="unsigned" byteOrder="leastSignificantByteFirst"/>

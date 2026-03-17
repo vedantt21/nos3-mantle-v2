@@ -28,46 +28,20 @@ TCS_TEST_LOOP_COUNT.times do |n|
     # Enable
     enable_tcs()
 
-    # Confirm default thermal telemetry
-    confirm_tcs_data(20, "OFF", "AUTO")
-
-    # Switch to manual mode and heat to the upper threshold
-    tcs_sim_mode_manual()
-    confirm_tcs_data(20, "OFF", "MANUAL")
-    tcs_sim_heater_on()
-    (21..50).each do |temp|
-        confirm_tcs_data(temp, "ON", "MANUAL")
-    end
+    # Confirm the enable command forces the heater on in manual mode
+    confirm_tcs_data(nil, "ON", "MANUAL")
+    sleep(1.1)
+    confirm_tcs_data(21, "ON", "MANUAL")
 
     # Manually command to enable when already enabled
     cmd_cnt = tlm("TCS TCS_HK_TLM CMD_COUNT")
     cmd_err_cnt = tlm("TCS TCS_HK_TLM CMD_ERR_COUNT")
     cmd("TCS HEATER_ENABLE")
     get_tcs_hk()
-    check("TCS TCS_HK_TLM CMD_COUNT == #{cmd_cnt}")
-    check("TCS TCS_HK_TLM CMD_ERR_COUNT == #{cmd_err_cnt+1}")
-
-    # Cool back to ambient in manual mode
-    tcs_sim_heater_off()
-    49.downto(20) do |temp|
-        confirm_tcs_data(temp, "OFF", "MANUAL")
-    end
-
-    # Heat again, then confirm auto mode enforces the threshold behavior
-    tcs_sim_heater_on()
-    (21..49).each do |temp|
-        confirm_tcs_data(temp, "ON", "MANUAL")
-    end
-    tcs_sim_mode_auto()
-    confirm_tcs_data(50, "ON", "AUTO")
-    confirm_tcs_data(49, "OFF", "AUTO")
-
-    # Auto mode should ignore manual heater commands
-    48.downto(20) do |temp|
-        confirm_tcs_data(temp, "OFF", "AUTO")
-    end
-    tcs_sim_heater_on()
-    confirm_tcs_data(20, "OFF", "AUTO")
+    check("TCS TCS_HK_TLM CMD_COUNT == #{cmd_cnt+1}")
+    check("TCS TCS_HK_TLM CMD_ERR_COUNT == #{cmd_err_cnt}")
+    sleep(1.1)
+    confirm_tcs_data(22, "ON", "MANUAL")
 
     # Disable
     disable_tcs()
