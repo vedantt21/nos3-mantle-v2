@@ -28,7 +28,6 @@
 #define TCS_CONTROL_MODE_MANUAL 0
 #define TCS_CONTROL_MODE_AUTO   1
 
-#define TCS_AMBIENT_TEMPERATURE_C 20
 #define TCS_INITIAL_TEMPERATURE_C 20
 #define TCS_LOWER_THRESHOLD_C     0
 #define TCS_UPPER_THRESHOLD_C     50
@@ -53,7 +52,7 @@ namespace Nos3
         void create_tcs_data(std::vector<uint8_t>& out_data); 
         void reset_thermal_state(void);
         void time_tick_callback(void);
-        void update_thermal_state(void);
+        void update_thermal_state(double dt);
         void uart_read_callback(const uint8_t *buf, size_t len); /* Handle data the hardware receives from its protocol bus */
         void command_callback(NosEngine::Common::Message msg); /* Handle backdoor commands and time tick to the simulator */
 
@@ -67,13 +66,14 @@ namespace Nos3
         std::uint32_t                                       _count;
         std::uint32_t                                       _config;
         std::uint32_t                                       _status;
-        std::int16_t                                        _ambient_temperature_c;
-        std::int16_t                                        _current_temperature_c;
+        double                                              _ambient_temperature_k;
+        double                                              _skin_temperature_k;
+        double                                              _internal_temperature_k;
         std::int16_t                                        _lower_threshold_c;
         std::int16_t                                        _upper_threshold_c;
         std::uint8_t                                        _heater_state;
         std::uint8_t                                        _control_mode;
-        std::uint64_t                                       _elapsed_microseconds;
+        double                                              _simulation_time_seconds;
     };
 }
 

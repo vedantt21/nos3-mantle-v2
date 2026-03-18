@@ -1,4 +1,50 @@
 #include <tcs_hardware_model.hpp>
+#include <cstring>
+#include <cmath>
+#include <math.h>
+
+namespace
+{
+    constexpr double TCS_KELVIN_OFFSET = 273.15;
+    constexpr double TCS_STEFAN_BOLTZMANN = 5.670374419e-8;
+    constexpr double TCS_THERMAL_EMISSIVITY = 0.8;
+    constexpr double TCS_RADIATING_AREA_M2 = 0.015;
+    constexpr double TCS_THERMAL_CAPACITANCE_J_PER_K = 3000.0;
+    constexpr double TCS_HEATER_POWER_W = 120.0;
+    constexpr double TCS_INTERNAL_SKIN_FRACTION = 0.75;
+
+    double ambient_temp(double t) {
+        return 273.0 + 150.0 * sin(M_PI / 4950.0 * t);
+    }
+
+    double celsius_to_kelvin(double temperature_c)
+    {
+        return temperature_c + TCS_KELVIN_OFFSET;
+    }
+
+    double kelvin_to_celsius(double temperature_k)
+    {
+        return temperature_k - TCS_KELVIN_OFFSET;
+    }
+
+    double skin_to_internal_kelvin(double skin_temperature_k, double ambient_temperature_k)
+    {
+        return ambient_temperature_k + TCS_INTERNAL_SKIN_FRACTION * (skin_temperature_k - ambient_temperature_k);
+    }
+
+    float kelvin_to_telemetry_kelvin(double temperature_k)
+    {
+        return static_cast<float>(temperature_k);
+    }
+
+    std::uint32_t float_to_u32_bits(float value)
+    {
+        std::uint32_t bits = 0;
+        static_assert(sizeof(float) == sizeof(bits), "Expected 32-bit float telemetry fields.");
+        std::memcpy(&bits, &value, sizeof(bits));
+        return bits;
+    }
+}
 
 namespace Nos3
 {
@@ -7,7 +53,7 @@ namespace Nos3
     extern ItcLogger::Logger *sim_logger;
 
     TcsHardwareModel::TcsHardwareModel(const boost::property_tree::ptree& config) : SimIHardwareModel(config), 
-    _tcs_dp(nullptr), _enabled(TCS_SIM_SUCCESS), _count(0), _config(0), _status(0), _elapsed_microseconds(0)
+    _tcs_dp(nullptr), _enabled(TCS_SIM_SUCCESS), _count(0), _config(0), _status(0), _simulation_time_seconds(0.0)
     {
         reset_thermal_state();
 
@@ -175,13 +221,14 @@ namespace Nos3
 
     void TcsHardwareModel::reset_thermal_state(void)
     {
-        _ambient_temperature_c = TCS_AMBIENT_TEMPERATURE_C;
-        _current_temperature_c = TCS_INITIAL_TEMPERATURE_C;
-        _lower_threshold_c     = TCS_LOWER_THRESHOLD_C;
-        _upper_threshold_c     = TCS_UPPER_THRESHOLD_C;
-        _heater_state          = TCS_HEATER_STATE_OFF;
-        _control_mode          = TCS_CONTROL_MODE_AUTO;
-        _elapsed_microseconds  = 0;
+        _simulation_time_seconds = 0.0;
+        _ambient_temperature_k   = ambient_temp(_simulation_time_seconds);
+        _skin_temperature_k     = celsius_to_kelvin(TCS_INITIAL_TEMPERATURE_C);
+        _internal_temperature_k = skin_to_internal_kelvin(_skin_temperature_k, _ambient_temperature_k);
+        _lower_threshold_c      = TCS_LOWER_THRESHOLD_C;
+        _upper_threshold_c      = TCS_UPPER_THRESHOLD_C;
+        _heater_state           = TCS_HEATER_STATE_OFF;
+        _control_mode           = TCS_CONTROL_MODE_AUTO;
     }
 
 
@@ -192,46 +239,55 @@ namespace Nos3
             return;
         }
 
-        _elapsed_microseconds += _sim_microseconds_per_tick;
-        while (_elapsed_microseconds >= 1000000ULL)
+        const double dt = static_cast<double>(_sim_microseconds_per_tick) / 1000000.0;
+        if (dt > 0.0)
         {
-            update_thermal_state();
-            _elapsed_microseconds -= 1000000ULL;
+            update_thermal_state(dt);
         }
     }
 
 
-    void TcsHardwareModel::update_thermal_state(void)
+    void TcsHardwareModel::update_thermal_state(double dt)
     {
+        const double t = _simulation_time_seconds;
+        const double T_ambient = ambient_temp(t);
+
+        _internal_temperature_k = skin_to_internal_kelvin(_skin_temperature_k, T_ambient);
+
+        const double current_temperature_c = kelvin_to_celsius(_internal_temperature_k);
+
         if (_control_mode == TCS_CONTROL_MODE_AUTO)
         {
-            if (_current_temperature_c <= _lower_threshold_c)
+            if (current_temperature_c <= _lower_threshold_c)
             {
                 _heater_state = TCS_HEATER_STATE_ON;
             }
-            else if (_current_temperature_c >= _upper_threshold_c)
+            else if (current_temperature_c >= _upper_threshold_c)
             {
                 _heater_state = TCS_HEATER_STATE_OFF;
             }
         }
 
-        if (_heater_state == TCS_HEATER_STATE_ON)
+        const double T = _skin_temperature_k;
+        const double Q_in = (_heater_state == TCS_HEATER_STATE_ON) ? TCS_HEATER_POWER_W : 0.0;
+        const double epsilon = TCS_THERMAL_EMISSIVITY;
+        const double sigma = TCS_STEFAN_BOLTZMANN;
+        const double A = TCS_RADIATING_AREA_M2;
+        const double C_th = TCS_THERMAL_CAPACITANCE_J_PER_K;
+        const double Q_rad = epsilon * sigma * A * (pow(T, 4) - pow(T_ambient, 4));
+        const double dTdt = (Q_in - Q_rad) / C_th;
+        double T_next = T + dt * dTdt;
+
+        if (!std::isfinite(T_next))
         {
-            _current_temperature_c++;
-        }
-        else
-        {
-            _current_temperature_c--;
+            sim_logger->warning("TcsHardwareModel::update_thermal_state: non-finite skin temperature computed at t=%.3fs. Retaining previous state.", t);
+            T_next = T;
         }
 
-        if (_current_temperature_c < _ambient_temperature_c)
-        {
-            _current_temperature_c = _ambient_temperature_c;
-        }
-        else if (_current_temperature_c > _upper_threshold_c)
-        {
-            _current_temperature_c = _upper_threshold_c;
-        }
+        _skin_temperature_k = T_next;
+        _simulation_time_seconds += dt;
+        _ambient_temperature_k = ambient_temp(_simulation_time_seconds);
+        _internal_temperature_k = skin_to_internal_kelvin(_skin_temperature_k, _ambient_temperature_k);
     }
 
 
@@ -272,13 +328,15 @@ namespace Nos3
     /* Custom function to prepare the Tcs Data */
     void TcsHardwareModel::create_tcs_data(std::vector<uint8_t>& out_data)
     {
-        std::uint16_t current_temperature = static_cast<std::uint16_t>(_current_temperature_c);
+        float current_temperature_k = kelvin_to_telemetry_kelvin(_internal_temperature_k);
         std::uint16_t lower_threshold     = static_cast<std::uint16_t>(_lower_threshold_c);
         std::uint16_t upper_threshold     = static_cast<std::uint16_t>(_upper_threshold_c);
-        std::uint16_t ambient_temperature = static_cast<std::uint16_t>(_ambient_temperature_c);
+        float ambient_temperature_k = kelvin_to_telemetry_kelvin(_ambient_temperature_k);
+        std::uint32_t current_temperature = float_to_u32_bits(current_temperature_k);
+        std::uint32_t ambient_temperature = float_to_u32_bits(ambient_temperature_k);
 
         /* Prepare data size */
-        out_data.resize(18, 0x00);
+        out_data.resize(22, 0x00);
 
         /* Streaming data header - 0xDEAD */
         out_data[0] = 0xDE;
@@ -291,23 +349,27 @@ namespace Nos3
         out_data[5] =  _count & 0x000000FF;
         
         /* Thermal payload is transmitted big-endian on the device UART link. */
-        out_data[6]  = (current_temperature >> 8) & 0x00FF;
-        out_data[7]  = current_temperature & 0x00FF;
-        out_data[8]  = (lower_threshold >> 8) & 0x00FF;
-        out_data[9]  = lower_threshold & 0x00FF;
-        out_data[10] = (upper_threshold >> 8) & 0x00FF;
-        out_data[11] = upper_threshold & 0x00FF;
-        out_data[12] = _heater_state;
-        out_data[13] = _control_mode;
-        out_data[14] = (ambient_temperature >> 8) & 0x00FF;
-        out_data[15] = ambient_temperature & 0x00FF;
+        out_data[6]  = (current_temperature >> 24) & 0x000000FF;
+        out_data[7]  = (current_temperature >> 16) & 0x000000FF;
+        out_data[8]  = (current_temperature >> 8) & 0x000000FF;
+        out_data[9]  = current_temperature & 0x000000FF;
+        out_data[10] = (lower_threshold >> 8) & 0x00FF;
+        out_data[11] = lower_threshold & 0x00FF;
+        out_data[12] = (upper_threshold >> 8) & 0x00FF;
+        out_data[13] = upper_threshold & 0x00FF;
+        out_data[14] = _heater_state;
+        out_data[15] = _control_mode;
+        out_data[16] = (ambient_temperature >> 24) & 0x000000FF;
+        out_data[17] = (ambient_temperature >> 16) & 0x000000FF;
+        out_data[18] = (ambient_temperature >> 8) & 0x000000FF;
+        out_data[19] = ambient_temperature & 0x000000FF;
 
-        sim_logger->debug("TcsHardwareModel::create_tcs_data: current=%dC lower=%dC upper=%dC heater=%u mode=%u ambient=%dC.",
-            _current_temperature_c, _lower_threshold_c, _upper_threshold_c, _heater_state, _control_mode, _ambient_temperature_c);
+        sim_logger->debug("TcsHardwareModel::create_tcs_data: internal=%.3fK skin=%.3fK lower=%dC upper=%dC heater=%u mode=%u ambient=%.3fK.",
+            static_cast<double>(current_temperature_k), _skin_temperature_k, _lower_threshold_c, _upper_threshold_c, _heater_state, _control_mode, static_cast<double>(ambient_temperature_k));
 
         /* Streaming data trailer - 0xBEEF */
-        out_data[16] = 0xBE;
-        out_data[17] = 0xEF;
+        out_data[20] = 0xBE;
+        out_data[21] = 0xEF;
     }
 
 

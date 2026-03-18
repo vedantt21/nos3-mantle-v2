@@ -196,8 +196,8 @@ SCH_ScheduleEntry_t SCH_DefaultScheduleTable[SCH_TABLE_ENTRIES] =
   {  SCH_UNUSED,   0,      0,  0, 0,  SCH_GROUP_NONE},
 
   /* slot #15 - Component HK */
-  {  SCH_UNUSED,   0,      0,  0, 0,  SCH_GROUP_NONE},
-  {  SCH_UNUSED,   0,      0,  0, 0,  SCH_GROUP_NONE},
+  {  SCH_ENABLED,  SCH_ACTIVITY_SEND_MSG,  5,  0, 110, SCH_GROUP_CFE_HK },  /* TCS HK Request */
+  {  SCH_ENABLED,  SCH_ACTIVITY_SEND_MSG,  1,  0, 111, SCH_GROUP_NONE },    /* TCS Data Request */
   {  SCH_UNUSED,   0,      0,  0, 0,  SCH_GROUP_NONE},
   {  SCH_UNUSED,   0,      0,  0, 0,  SCH_GROUP_NONE},
   {  SCH_UNUSED,   0,      0,  0, 0,  SCH_GROUP_NONE},
@@ -828,4 +828,3 @@ CFE_TBL_FILEDEF(SCH_DefaultScheduleTable, SCH.SCHED_DEF, SCH schedule table, sch
 /************************/
 /*  End of File Comment */
 /************************/
-

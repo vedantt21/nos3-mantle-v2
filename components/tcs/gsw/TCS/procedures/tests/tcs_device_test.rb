@@ -40,8 +40,12 @@ TCS_TEST_LOOP_COUNT.times do |n|
     # Command the heater on after TCS communications are enabled
     enable_heater()
     confirm_tcs_data(nil, "ON", "MANUAL")
-    sleep(1.1)
-    confirm_tcs_data(21, "ON", "MANUAL")
+    get_tcs_data()
+    current_temperature = tlm("TCS TCS_DATA_TLM CURRENT_TEMPERATURE")
+    sleep(30.5)
+    get_tcs_data()
+    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE >= #{current_temperature + 1.0}")
+    confirm_tcs_data(nil, "ON", "MANUAL")
 
     # Manually command heater enable when the heater is already on
     cmd_cnt = tlm("TCS TCS_HK_TLM CMD_COUNT")
@@ -50,8 +54,12 @@ TCS_TEST_LOOP_COUNT.times do |n|
     get_tcs_hk()
     check("TCS TCS_HK_TLM CMD_COUNT == #{cmd_cnt+1}")
     check("TCS TCS_HK_TLM CMD_ERR_COUNT == #{cmd_err_cnt}")
-    sleep(1.1)
-    confirm_tcs_data(22, "ON", "MANUAL")
+    get_tcs_data()
+    current_temperature = tlm("TCS TCS_DATA_TLM CURRENT_TEMPERATURE")
+    sleep(30.5)
+    get_tcs_data()
+    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE >= #{current_temperature + 1.0}")
+    confirm_tcs_data(nil, "ON", "MANUAL")
 
     # Disable
     disable_tcs()

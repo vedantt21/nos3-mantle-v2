@@ -62,6 +62,7 @@
 #include "novatel_oem615_msgids.h"
 #include "sample_msgids.h"
 #include "syn_msgids.h"
+#include "tcs_msgids.h"
 
 /*
 ** Message Table entry map...
@@ -338,10 +339,10 @@ SCH_MessageEntry_t SCH_DefaultMessageTable[SCH_MAX_MESSAGES] =
     /* command ID #109 */
   { { CFE_MAKE_BIG16(SCH_UNUSED_MID) } },
   
-    /* command ID #110 */
-  { { CFE_MAKE_BIG16(SCH_UNUSED_MID) } },
-    /* command ID #111 */
-  { { CFE_MAKE_BIG16(SCH_UNUSED_MID) } },
+    /* command ID #110 - TCS HK */
+  { { CFE_MAKE_BIG16(TCS_REQ_HK_MID),  CFE_MAKE_BIG16(0xC000), CFE_MAKE_BIG16(0x0001), CFE_MAKE_BIG16(0x0000) } },
+    /* command ID #111 - TCS Data */
+  { { CFE_MAKE_BIG16(TCS_REQ_HK_MID),  CFE_MAKE_BIG16(0xC000), CFE_MAKE_BIG16(0x0001), CFE_MAKE_BIG16(0x0100) } },
     /* command ID #112 */
   { { CFE_MAKE_BIG16(SCH_UNUSED_MID) } },
     /* command ID #113 */
@@ -406,4 +407,3 @@ CFE_TBL_FILEDEF(SCH_DefaultMessageTable, SCH.MSG_DEFS, SCH message definitions t
 /************************/
 /*  End of File Comment */
 /************************/
-

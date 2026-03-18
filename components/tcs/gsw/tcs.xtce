@@ -6,12 +6,12 @@
         <xtce:IntegerParameterType name="DEVICE_COUNTER_Type" shortDescription="Reported Device Command Counter" signed="false">
           <xtce:IntegerDataEncoding sizeInBits="32" encoding="unsigned" byteOrder="leastSignificantByteFirst"/>
         </xtce:IntegerParameterType>
-        <xtce:IntegerParameterType name="CURRENT_TEMPERATURE_Type" shortDescription="Current temperature (C)" signed="true">
-          <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
+        <xtce:FloatParameterType name="CURRENT_TEMPERATURE_Type" sizeInBits="32" shortDescription="Internal temperature (K)">
+          <xtce:FloatDataEncoding sizeInBits="32" encoding="IEEE754_1985" byteOrder="leastSignificantByteFirst"/>
           <xtce:UnitSet>
-            <xtce:Unit>C</xtce:Unit>
+            <xtce:Unit>K</xtce:Unit>
           </xtce:UnitSet>
-        </xtce:IntegerParameterType>
+        </xtce:FloatParameterType>
         <xtce:IntegerParameterType name="LOWER_THRESHOLD_Type" shortDescription="Lower heater control threshold (C)" signed="true">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
           <xtce:UnitSet>
@@ -38,12 +38,12 @@
             <xtce:Enumeration value="1" label="AUTO"/>
           </xtce:EnumerationList>
         </xtce:EnumeratedParameterType>
-        <xtce:IntegerParameterType name="AMBIENT_TEMPERATURE_Type" shortDescription="Ambient temperature (C)" signed="true">
-          <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
+        <xtce:FloatParameterType name="AMBIENT_TEMPERATURE_Type" sizeInBits="32" shortDescription="Ambient temperature (K)">
+          <xtce:FloatDataEncoding sizeInBits="32" encoding="IEEE754_1985" byteOrder="leastSignificantByteFirst"/>
           <xtce:UnitSet>
-            <xtce:Unit>C</xtce:Unit>
+            <xtce:Unit>K</xtce:Unit>
           </xtce:UnitSet>
-        </xtce:IntegerParameterType>
+        </xtce:FloatParameterType>
         <xtce:IntegerParameterType name="PASS_NUMBER_Type" shortDescription="Science Pass Number" signed="false">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="unsigned" byteOrder="leastSignificantByteFirst"/>
         </xtce:IntegerParameterType>

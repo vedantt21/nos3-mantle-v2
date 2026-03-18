@@ -83,9 +83,10 @@ def confirm_tcs_data(expected_current = nil, expected_heater = nil, expected_mod
     get_tcs_data()
     check("TCS TCS_DATA_TLM LOWER_THRESHOLD == 0")
     check("TCS TCS_DATA_TLM UPPER_THRESHOLD == 50")
-    check("TCS TCS_DATA_TLM AMBIENT_TEMPERATURE == 20")
-    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE >= 20")
-    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE <= 50")
+    check("TCS TCS_DATA_TLM AMBIENT_TEMPERATURE >= 123.0")
+    check("TCS TCS_DATA_TLM AMBIENT_TEMPERATURE <= 423.0")
+    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE >= 123.0")
+    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE <= 500.0")
 
     if (!expected_current.nil?)
         check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE == #{expected_current}")

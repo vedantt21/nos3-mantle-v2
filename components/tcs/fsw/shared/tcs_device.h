@@ -70,12 +70,12 @@ typedef struct
 typedef struct
 {
     uint32_t DeviceCounter;
-    int16_t  CurrentTemperatureC;
+    float    CurrentTemperatureK;
     int16_t  LowerThresholdC;
     int16_t  UpperThresholdC;
     uint8_t  HeaterState;
     uint8_t  ControlMode;
-    int16_t  AmbientTemperatureC;
+    float    AmbientTemperatureK;
 
 } __attribute__((packed)) TCS_Device_Data_tlm_t;
 #define TCS_DEVICE_DATA_LNGTH sizeof(TCS_Device_Data_tlm_t)

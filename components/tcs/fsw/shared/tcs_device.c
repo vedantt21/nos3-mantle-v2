@@ -10,6 +10,18 @@
 ** Include Files
 */
 #include "tcs_device.h"
+#include <string.h>
+
+static float TCS_UnpackFloatBE(const uint8_t *data)
+{
+    uint32_t raw = 0;
+    float value = 0.0f;
+
+    raw = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) | ((uint32_t)data[2] << 8) | ((uint32_t)data[3]);
+    memcpy(&value, &raw, sizeof(value));
+
+    return value;
+}
 
 /*
 ** Generic read data from device
@@ -223,32 +235,32 @@ int32_t TCS_RequestData(uart_info_t *device, TCS_Device_Data_tlm_t *data)
 
             /* Verify data header and trailer */
             if ((read_data[0] == TCS_DEVICE_HDR_0) && (read_data[1] == TCS_DEVICE_HDR_1) &&
-                (read_data[16] == TCS_DEVICE_TRAILER_0) && (read_data[17] == TCS_DEVICE_TRAILER_1))
+                (read_data[20] == TCS_DEVICE_TRAILER_0) && (read_data[21] == TCS_DEVICE_TRAILER_1))
             {
                 data->DeviceCounter = read_data[2] << 24;
                 data->DeviceCounter |= read_data[3] << 16;
                 data->DeviceCounter |= read_data[4] << 8;
                 data->DeviceCounter |= read_data[5];
 
-                data->CurrentTemperatureC = (int16_t)((read_data[6] << 8) | read_data[7]);
+                data->CurrentTemperatureK = TCS_UnpackFloatBE(&read_data[6]);
 
-                data->LowerThresholdC = (int16_t)((read_data[8] << 8) | read_data[9]);
+                data->LowerThresholdC = (int16_t)((read_data[10] << 8) | read_data[11]);
 
-                data->UpperThresholdC = (int16_t)((read_data[10] << 8) | read_data[11]);
-                data->HeaterState      = read_data[12];
-                data->ControlMode      = read_data[13];
-                data->AmbientTemperatureC = (int16_t)((read_data[14] << 8) | read_data[15]);
+                data->UpperThresholdC = (int16_t)((read_data[12] << 8) | read_data[13]);
+                data->HeaterState      = read_data[14];
+                data->ControlMode      = read_data[15];
+                data->AmbientTemperatureK = TCS_UnpackFloatBE(&read_data[16]);
 
 #ifdef TCS_CFG_DEBUG
                 OS_printf("  Header  = 0x%02x%02x  \n", read_data[0], read_data[1]);
                 OS_printf("  Counter = 0x%08x, %d  \n", data->DeviceCounter, data->DeviceCounter);
-                OS_printf("  Current Temperature = %d C  \n", (int)data->CurrentTemperatureC);
+                OS_printf("  Current Temperature = %.3f K  \n", (double)data->CurrentTemperatureK);
                 OS_printf("  Lower Threshold     = %d C  \n", (int)data->LowerThresholdC);
                 OS_printf("  Upper Threshold     = %d C  \n", (int)data->UpperThresholdC);
                 OS_printf("  Heater State        = %u    \n", (unsigned int)data->HeaterState);
                 OS_printf("  Control Mode        = %u    \n", (unsigned int)data->ControlMode);
-                OS_printf("  Ambient Temperature = %d C  \n", (int)data->AmbientTemperatureC);
-                OS_printf("  Trailer = 0x%02x%02x  \n", read_data[16], read_data[17]);
+                OS_printf("  Ambient Temperature = %.3f K  \n", (double)data->AmbientTemperatureK);
+                OS_printf("  Trailer = 0x%02x%02x  \n", read_data[20], read_data[21]);
 #endif
             }
             else
