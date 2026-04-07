@@ -12,16 +12,16 @@
             <xtce:Unit>K</xtce:Unit>
           </xtce:UnitSet>
         </xtce:FloatParameterType>
-        <xtce:IntegerParameterType name="LOWER_THRESHOLD_Type" shortDescription="Lower heater control threshold (C)" signed="true">
+        <xtce:IntegerParameterType name="LOWER_THRESHOLD_Type" shortDescription="Lower heater control threshold (K)" signed="true">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
           <xtce:UnitSet>
-            <xtce:Unit>C</xtce:Unit>
+            <xtce:Unit>K</xtce:Unit>
           </xtce:UnitSet>
         </xtce:IntegerParameterType>
-        <xtce:IntegerParameterType name="UPPER_THRESHOLD_Type" shortDescription="Upper heater control threshold (C)" signed="true">
+        <xtce:IntegerParameterType name="UPPER_THRESHOLD_Type" shortDescription="Upper heater control threshold (K)" signed="true">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
           <xtce:UnitSet>
-            <xtce:Unit>C</xtce:Unit>
+            <xtce:Unit>K</xtce:Unit>
           </xtce:UnitSet>
         </xtce:IntegerParameterType>
         <xtce:EnumeratedParameterType name="HEATER_STATE_Type" shortDescription="Heater state">
@@ -38,7 +38,7 @@
             <xtce:Enumeration value="1" label="AUTO"/>
           </xtce:EnumerationList>
         </xtce:EnumeratedParameterType>
-        <xtce:FloatParameterType name="AMBIENT_TEMPERATURE_Type" sizeInBits="32" shortDescription="Ambient temperature (K)">
+        <xtce:FloatParameterType name="SKIN_TEMPERATURE_Type" sizeInBits="32" shortDescription="Skin temperature (K)">
           <xtce:FloatDataEncoding sizeInBits="32" encoding="IEEE754_1985" byteOrder="leastSignificantByteFirst"/>
           <xtce:UnitSet>
             <xtce:Unit>K</xtce:Unit>
@@ -58,7 +58,7 @@
         <xtce:Parameter name="UPPER_THRESHOLD" parameterTypeRef="UPPER_THRESHOLD_Type"/>
         <xtce:Parameter name="HEATER_STATE" parameterTypeRef="HEATER_STATE_Type"/>
         <xtce:Parameter name="CONTROL_MODE" parameterTypeRef="CONTROL_MODE_Type"/>
-        <xtce:Parameter name="AMBIENT_TEMPERATURE" parameterTypeRef="AMBIENT_TEMPERATURE_Type"/>
+        <xtce:Parameter name="SKIN_TEMPERATURE" parameterTypeRef="SKIN_TEMPERATURE_Type"/>
         <xtce:Parameter name="PASS_NUMBER" parameterTypeRef="PASS_NUMBER_Type"/>
         <xtce:Parameter name="REGION_STATUS" parameterTypeRef="REGION_STATUS_Type"/>
       </xtce:ParameterSet>
@@ -71,7 +71,7 @@
             <xtce:ParameterRefEntry parameterRef="UPPER_THRESHOLD"/>
             <xtce:ParameterRefEntry parameterRef="HEATER_STATE"/>
             <xtce:ParameterRefEntry parameterRef="CONTROL_MODE"/>
-            <xtce:ParameterRefEntry parameterRef="AMBIENT_TEMPERATURE"/>
+            <xtce:ParameterRefEntry parameterRef="SKIN_TEMPERATURE"/>
             <xtce:ParameterRefEntry parameterRef="PASS_NUMBER"/>
             <xtce:ParameterRefEntry parameterRef="REGION_STATUS"/>
           </xtce:EntryList>
@@ -224,6 +224,18 @@
             <xtce:EntryList/>
           </xtce:CommandContainer>
         </xtce:MetaCommand>
+        <xtce:MetaCommand name="HEATER_AUTO">
+          <xtce:BaseMetaCommand metaCommandRef="/CCSDS/CCSDS_TC">
+            <xtce:ArgumentAssignmentList>
+              <xtce:ArgumentAssignment argumentName="CCSDS_STREAMID" argumentValue="6394"/>
+              <xtce:ArgumentAssignment argumentName="CCSDS_FC" argumentValue="7"/>
+            </xtce:ArgumentAssignmentList>
+          </xtce:BaseMetaCommand>
+          <xtce:ArgumentList/>
+          <xtce:CommandContainer name="TCS_HEATER_AUTO_CommandContainer">
+            <xtce:EntryList/>
+          </xtce:CommandContainer>
+        </xtce:MetaCommand>
         <xtce:MetaCommand name="TCS_ENABLE">
           <xtce:BaseMetaCommand metaCommandRef="/CCSDS/CCSDS_TC">
             <xtce:ArgumentAssignmentList>
@@ -233,6 +245,18 @@
           </xtce:BaseMetaCommand>
           <xtce:ArgumentList/>
           <xtce:CommandContainer name="TCS_TCS_ENABLE_CommandContainer">
+            <xtce:EntryList/>
+          </xtce:CommandContainer>
+        </xtce:MetaCommand>
+        <xtce:MetaCommand name="TCS_DISABLE">
+          <xtce:BaseMetaCommand metaCommandRef="/CCSDS/CCSDS_TC">
+            <xtce:ArgumentAssignmentList>
+              <xtce:ArgumentAssignment argumentName="CCSDS_STREAMID" argumentValue="6394"/>
+              <xtce:ArgumentAssignment argumentName="CCSDS_FC" argumentValue="6"/>
+            </xtce:ArgumentAssignmentList>
+          </xtce:BaseMetaCommand>
+          <xtce:ArgumentList/>
+          <xtce:CommandContainer name="TCS_TCS_DISABLE_CommandContainer">
             <xtce:EntryList/>
           </xtce:CommandContainer>
         </xtce:MetaCommand>

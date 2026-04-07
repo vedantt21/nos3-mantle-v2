@@ -46,10 +46,10 @@
 #define TCS_CONTROL_MODE_MANUAL 0
 #define TCS_CONTROL_MODE_AUTO   1
 
-#define TCS_AMBIENT_TEMPERATURE_C      20
-#define TCS_INITIAL_TEMPERATURE_C      20
-#define TCS_LOWER_THRESHOLD_C          0
-#define TCS_UPPER_THRESHOLD_C          50
+#define TCS_INITIAL_SKIN_TEMPERATURE_K     293.0f
+#define TCS_INITIAL_INTERNAL_TEMPERATURE_K 293.0f
+#define TCS_LOWER_THRESHOLD_K              273
+#define TCS_UPPER_THRESHOLD_K              283
 
 /*
 ** TCS device housekeeping telemetry definition
@@ -71,11 +71,11 @@ typedef struct
 {
     uint32_t DeviceCounter;
     float    CurrentTemperatureK;
-    int16_t  LowerThresholdC;
-    int16_t  UpperThresholdC;
+    int16_t  LowerThresholdK;
+    int16_t  UpperThresholdK;
     uint8_t  HeaterState;
     uint8_t  ControlMode;
-    float    AmbientTemperatureK;
+    float    SkinTemperatureK;
 
 } __attribute__((packed)) TCS_Device_Data_tlm_t;
 #define TCS_DEVICE_DATA_LNGTH sizeof(TCS_Device_Data_tlm_t)

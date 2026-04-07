@@ -61,8 +61,8 @@ void Test_TCS_RequestData(void)
 
     uint8_t read_data[] = {0xDE, 0xAD, 0x00, 0x00, 0x00, 0x07,
                            0x43, 0x92, 0x93, 0x33,
-                           0x00, 0x00,
-                           0x00, 0x32,
+                           0x00, 0xFA,
+                           0x01, 0x40,
                            0x01,
                            0x01,
                            0x43, 0x88, 0x80, 0x00,
@@ -74,8 +74,8 @@ void Test_TCS_RequestData(void)
 
     uint8_t invalid_read_data[] = {0xDE, 0xAD, 0x00, 0x00, 0x00, 0x07,
                                    0x43, 0x92, 0x93, 0x33,
-                                   0x00, 0x00,
-                                   0x00, 0x32,
+                                   0x00, 0xFA,
+                                   0x01, 0x40,
                                    0x01,
                                    0x01,
                                    0x43, 0x88, 0x80, 0x00,

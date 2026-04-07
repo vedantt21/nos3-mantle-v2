@@ -338,6 +338,32 @@ void TCS_ProcessGroundCommand(void)
             break;
 
         /*
+        ** Heater Disable Command
+        */
+        case TCS_HEATER_DISABLE_CC:
+            if (TCS_VerifyCmdLength(TCS_AppData.MsgPtr, sizeof(TCS_NoArgs_cmd_t)) == OS_SUCCESS)
+            {
+#ifdef TCS_CFG_DEBUG
+                OS_printf("TCS: TCS_HEATER_DISABLE_CC received \n");
+#endif
+                TCS_HeaterDisable();
+            }
+            break;
+
+        /*
+        ** Heater Auto Command
+        */
+        case TCS_HEATER_AUTO_CC:
+            if (TCS_VerifyCmdLength(TCS_AppData.MsgPtr, sizeof(TCS_NoArgs_cmd_t)) == OS_SUCCESS)
+            {
+#ifdef TCS_CFG_DEBUG
+                OS_printf("TCS: TCS_HEATER_AUTO_CC received \n");
+#endif
+                TCS_HeaterAuto();
+            }
+            break;
+
+        /*
         ** Enable Command
         */
         case TCS_ENABLE_CC:
@@ -551,12 +577,22 @@ void TCS_ResetCounters(void)
     return;
 }
 
+static int32 TCS_SetControlMode(uint8_t control_mode)
+{
+    return TCS_CommandDevice(&TCS_AppData.TcsUart, TCS_DEVICE_SET_MODE_CMD, control_mode);
+}
+
+static int32 TCS_SetHeaterState(uint8_t heater_state)
+{
+    return TCS_CommandDevice(&TCS_AppData.TcsUart, TCS_DEVICE_SET_HEATER_CMD, heater_state);
+}
+
 static int32 TCS_SetThermalControl(uint8_t control_mode, uint8_t heater_state)
 {
-    int32 status = TCS_CommandDevice(&TCS_AppData.TcsUart, TCS_DEVICE_SET_MODE_CMD, control_mode);
+    int32 status = TCS_SetControlMode(control_mode);
     if (status == OS_SUCCESS)
     {
-        status = TCS_CommandDevice(&TCS_AppData.TcsUart, TCS_DEVICE_SET_HEATER_CMD, heater_state);
+        status = TCS_SetHeaterState(heater_state);
     }
     return status;
 }
@@ -593,6 +629,78 @@ void TCS_HeaterEnable(void)
 
         CFE_EVS_SendEvent(TCS_HEATER_ENABLE_ERR_EID, CFE_EVS_EventType_ERROR,
                           "TCS: Heater enable command failed, status %d", device_status);
+    }
+    return;
+}
+
+/*
+** Disable Heater
+*/
+void TCS_HeaterDisable(void)
+{
+    int32 device_status = OS_SUCCESS;
+
+    if (TCS_AppData.HkTelemetryPkt.DeviceEnabled != TCS_DEVICE_ENABLED)
+    {
+        TCS_AppData.HkTelemetryPkt.CommandErrorCount++;
+
+        CFE_EVS_SendEvent(TCS_HEATER_DISABLE_ERR_EID, CFE_EVS_EventType_ERROR,
+                          "TCS: Heater disable failed, device disabled");
+        return;
+    }
+
+    TCS_AppData.HkTelemetryPkt.CommandCount++;
+
+    device_status = TCS_SetThermalControl(TCS_CONTROL_MODE_MANUAL, TCS_HEATER_STATE_OFF);
+    if (device_status == OS_SUCCESS)
+    {
+        TCS_AppData.HkTelemetryPkt.DeviceCount++;
+
+        CFE_EVS_SendEvent(TCS_HEATER_DISABLE_INF_EID, CFE_EVS_EventType_INFORMATION,
+                          "TCS: Heater disabled successfully");
+    }
+    else
+    {
+        TCS_AppData.HkTelemetryPkt.DeviceErrorCount++;
+
+        CFE_EVS_SendEvent(TCS_HEATER_DISABLE_ERR_EID, CFE_EVS_EventType_ERROR,
+                          "TCS: Heater disable command failed, status %d", device_status);
+    }
+    return;
+}
+
+/*
+** Enable Automatic Heater Control
+*/
+void TCS_HeaterAuto(void)
+{
+    int32 device_status = OS_SUCCESS;
+
+    if (TCS_AppData.HkTelemetryPkt.DeviceEnabled != TCS_DEVICE_ENABLED)
+    {
+        TCS_AppData.HkTelemetryPkt.CommandErrorCount++;
+
+        CFE_EVS_SendEvent(TCS_HEATER_AUTO_ERR_EID, CFE_EVS_EventType_ERROR,
+                          "TCS: Heater auto-control failed, device disabled");
+        return;
+    }
+
+    TCS_AppData.HkTelemetryPkt.CommandCount++;
+
+    device_status = TCS_SetControlMode(TCS_CONTROL_MODE_AUTO);
+    if (device_status == OS_SUCCESS)
+    {
+        TCS_AppData.HkTelemetryPkt.DeviceCount++;
+
+        CFE_EVS_SendEvent(TCS_HEATER_AUTO_INF_EID, CFE_EVS_EventType_INFORMATION,
+                          "TCS: Heater automatic control enabled successfully");
+    }
+    else
+    {
+        TCS_AppData.HkTelemetryPkt.DeviceErrorCount++;
+
+        CFE_EVS_SendEvent(TCS_HEATER_AUTO_ERR_EID, CFE_EVS_EventType_ERROR,
+                          "TCS: Heater auto-control command failed, status %d", device_status);
     }
     return;
 }
@@ -663,7 +771,7 @@ void TCS_Disable(void)
         {
             TCS_AppData.HkTelemetryPkt.DeviceErrorCount++;
             CFE_EVS_SendEvent(TCS_DISABLE_ERR_EID, CFE_EVS_EventType_ERROR,
-                              "TCS: Heater disable command failed, status %d", device_status);
+                              "TCS: Device disable pre-shutdown heater-off command failed, status %d", device_status);
         }
 
         status = uart_close_port(&TCS_AppData.TcsUart);

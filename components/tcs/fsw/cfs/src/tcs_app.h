@@ -93,6 +93,8 @@ void  TCS_ReportHousekeeping(void);
 void  TCS_ReportDeviceTelemetry(void);
 void  TCS_ResetCounters(void);
 void  TCS_HeaterEnable(void);
+void  TCS_HeaterDisable(void);
+void  TCS_HeaterAuto(void);
 void  TCS_Enable(void);
 void  TCS_Disable(void);
 void  TCS_Configure(void);

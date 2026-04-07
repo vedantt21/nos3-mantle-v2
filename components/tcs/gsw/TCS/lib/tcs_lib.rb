@@ -61,9 +61,17 @@ def enable_heater()
     tcs_cmd("TCS HEATER_ENABLE")
 end
 
+def disable_heater()
+    tcs_cmd("TCS HEATER_DISABLE")
+end
+
+def enable_auto_control()
+    tcs_cmd("TCS HEATER_AUTO")
+end
+
 def disable_tcs()
     # Send command
-    tcs_cmd("TCS HEATER_DISABLE")
+    tcs_cmd("TCS TCS_DISABLE")
     # Confirm
     check("TCS TCS_HK_TLM DEVICE_ENABLED == 'DISABLED'")
 end
@@ -81,12 +89,12 @@ def confirm_tcs_data(expected_current = nil, expected_heater = nil, expected_mod
     dev_cmd_err_cnt = tlm("TCS TCS_HK_TLM DEVICE_ERR_COUNT")
     
     get_tcs_data()
-    check("TCS TCS_DATA_TLM LOWER_THRESHOLD == 0")
-    check("TCS TCS_DATA_TLM UPPER_THRESHOLD == 50")
-    check("TCS TCS_DATA_TLM AMBIENT_TEMPERATURE >= 123.0")
-    check("TCS TCS_DATA_TLM AMBIENT_TEMPERATURE <= 423.0")
-    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE >= 123.0")
-    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE <= 500.0")
+    check("TCS TCS_DATA_TLM LOWER_THRESHOLD == 273")
+    check("TCS TCS_DATA_TLM UPPER_THRESHOLD == 283")
+    check("TCS TCS_DATA_TLM SKIN_TEMPERATURE >= 150.0")
+    check("TCS TCS_DATA_TLM SKIN_TEMPERATURE <= 400.0")
+    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE >= 150.0")
+    check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE <= 400.0")
 
     if (!expected_current.nil?)
         check("TCS TCS_DATA_TLM CURRENT_TEMPERATURE == #{expected_current}")

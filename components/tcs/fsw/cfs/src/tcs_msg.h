@@ -19,9 +19,11 @@
 #define TCS_NOOP_CC           0
 #define TCS_RESET_COUNTERS_CC 1
 #define TCS_HEATER_ENABLE_CC  2
-#define TCS_DISABLE_CC        3
+#define TCS_HEATER_DISABLE_CC 3
 #define TCS_CONFIG_CC         4
 #define TCS_ENABLE_CC         5
+#define TCS_DISABLE_CC        6
+#define TCS_HEATER_AUTO_CC    7
 
 /*
 ** Telemetry Request Command Codes

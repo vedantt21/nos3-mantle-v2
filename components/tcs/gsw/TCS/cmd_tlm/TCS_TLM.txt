@@ -28,17 +28,17 @@ TELEMETRY TCS TCS_DATA_TLM <%= CosmosCfsConfig::PROCESSOR_ENDIAN %> "TCS_Device_
   APPEND_ITEM    DEVICE_COUNTER       32 UINT         "Reported Device Command Counter"
   APPEND_ITEM    CURRENT_TEMPERATURE 32 FLOAT        "Internal temperature (K)"
     UNITS Kelvin K
-  APPEND_ITEM    LOWER_THRESHOLD     16 INT          "Lower heater control threshold (C)"
-    UNITS Celsius C
-  APPEND_ITEM    UPPER_THRESHOLD     16 INT          "Upper heater control threshold (C)"
-    UNITS Celsius C
+  APPEND_ITEM    LOWER_THRESHOLD     16 INT          "Lower heater control threshold (K)"
+    UNITS Kelvin K
+  APPEND_ITEM    UPPER_THRESHOLD     16 INT          "Upper heater control threshold (K)"
+    UNITS Kelvin K
   APPEND_ITEM    HEATER_STATE         8 UINT         "Heater state"
     STATE OFF 0
     STATE ON  1
   APPEND_ITEM    CONTROL_MODE         8 UINT         "Thermal control mode"
     STATE MANUAL 0
     STATE AUTO   1
-  APPEND_ITEM    AMBIENT_TEMPERATURE 32 FLOAT        "Ambient temperature (K)"
+  APPEND_ITEM    SKIN_TEMPERATURE    32 FLOAT        "Skin temperature (K)"
     UNITS Kelvin K
 # TODO: This is specific to the tcs application, remove if using template generator
   APPEND_ITEM    PassNumber             16 UINT       "Science Pass Number"

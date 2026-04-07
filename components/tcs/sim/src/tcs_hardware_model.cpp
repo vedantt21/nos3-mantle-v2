@@ -1,35 +1,351 @@
 #include <tcs_hardware_model.hpp>
+#include <algorithm>
+#include <array>
 #include <cstring>
 #include <cmath>
 #include <math.h>
 
 namespace
 {
-    constexpr double TCS_KELVIN_OFFSET = 273.15;
+    constexpr double TCS_PI = 3.14159265358979323846;
+    constexpr double TCS_INTEGRATION_STEP_SECONDS = 1.0;
+    constexpr double TCS_ORBIT_PERIOD_SECONDS = 165.0 * 60.0;
+    constexpr double TCS_BETA_DEG = 20.0;
+    constexpr double TCS_PENUMBRA_SECONDS = 180.0;
     constexpr double TCS_STEFAN_BOLTZMANN = 5.670374419e-8;
-    constexpr double TCS_THERMAL_EMISSIVITY = 0.8;
-    constexpr double TCS_RADIATING_AREA_M2 = 0.015;
-    constexpr double TCS_THERMAL_CAPACITANCE_J_PER_K = 3000.0;
-    constexpr double TCS_HEATER_POWER_W = 120.0;
-    constexpr double TCS_INTERNAL_SKIN_FRACTION = 0.75;
+    constexpr double TCS_EARTH_GM_M3_PER_S2 = 3.986004418e14;
+    constexpr double TCS_EARTH_RADIUS_M = 6378.137e3;
+    constexpr double TCS_SOLAR_CONSTANT_W_PER_M2 = 1361.6;
+    constexpr double TCS_EARTH_ALBEDO_FACTOR = 0.30;
+    constexpr double TCS_EARTH_EFFECTIVE_TEMPERATURE_K = 255.0;
+    constexpr double TCS_CUBESAT_LENGTH_M = 0.3405;
+    constexpr double TCS_CUBESAT_WIDTH_M = 0.100;
+    constexpr double TCS_CUBESAT_HEIGHT_M = 0.100;
+    constexpr double TCS_ALPHA_PAINT = 0.15;
+    constexpr double TCS_EPSILON_PAINT = 0.91;
+    constexpr double TCS_PV_FRACTION = 0.80;
+    constexpr double TCS_ALPHA_PV = 0.92;
+    constexpr double TCS_EPSILON_PV = 0.85;
+    constexpr double TCS_TOTAL_MASS_KG = 4.0;
+    constexpr double TCS_SKIN_MASS_FRACTION = 0.30;
+    constexpr double TCS_SPECIFIC_HEAT_J_PER_KG_K = 896.0;
+    constexpr double TCS_CONTACT_H_W_PER_M2_K = 400.0;
+    constexpr double TCS_CONTACT_AREA_M2 = 0.02;
+    constexpr double TCS_HEATER_POWER_W = 25.0;
+    constexpr double TCS_INTERNAL_POWER_SUNLIGHT_W = 8.0;
+    constexpr double TCS_INTERNAL_POWER_ECLIPSE_W = 4.0;
 
-    double ambient_temp(double t) {
-        return 273.0 + 150.0 * sin(M_PI / 4950.0 * t);
+    enum TcsAttitudeMode
+    {
+        TCS_ATTITUDE_NADIR,
+        TCS_ATTITUDE_WORST_HOT,
+        TCS_ATTITUDE_WORST_COLD,
+        TCS_ATTITUDE_TUMBLING_MEAN
+    };
+
+    constexpr TcsAttitudeMode TCS_ATTITUDE_MODE = TCS_ATTITUDE_NADIR;
+
+    struct ThermalState
+    {
+        double skin_temperature_k;
+        double internal_temperature_k;
+    };
+
+    struct ThermalDerivatives
+    {
+        double d_skin_k_per_s;
+        double d_internal_k_per_s;
+    };
+
+    struct ThermalModelParameters
+    {
+        double orbit_period_s;
+        double beta_rad;
+        double penumbra_s;
+        double sigma;
+        double earth_gm_m3_per_s2;
+        double earth_radius_m;
+        double solar_constant_w_per_m2;
+        double earth_albedo_factor;
+        double earth_effective_temperature_k;
+        double total_external_area_m2;
+        std::array<std::array<double, 3>, 6> face_normals;
+        std::array<double, 6> face_areas_m2;
+        double absorptivity;
+        double emissivity;
+        double skin_heat_capacity_j_per_k;
+        double internal_heat_capacity_j_per_k;
+        double thermal_conductance_w_per_k;
+        double orbital_altitude_m;
+        double orbital_semi_major_axis_m;
+        double beta_critical_rad;
+        double eclipse_fraction;
+        double max_earth_view_factor;
+    };
+
+    double deg_to_rad(double degrees)
+    {
+        return degrees * TCS_PI / 180.0;
     }
 
-    double celsius_to_kelvin(double temperature_c)
+    double dot_product(const std::array<double, 3> &lhs, const std::array<double, 3> &rhs)
     {
-        return temperature_c + TCS_KELVIN_OFFSET;
+        return lhs[0] * rhs[0] + lhs[1] * rhs[1] + lhs[2] * rhs[2];
     }
 
-    double kelvin_to_celsius(double temperature_k)
+    void orbit_from_period(double orbit_period_s, double earth_gm_m3_per_s2, double earth_radius_m,
+                           double &altitude_m, double &semi_major_axis_m)
     {
-        return temperature_k - TCS_KELVIN_OFFSET;
+        semi_major_axis_m = std::pow(earth_gm_m3_per_s2 * std::pow(orbit_period_s / (2.0 * TCS_PI), 2.0), 1.0 / 3.0);
+        altitude_m = semi_major_axis_m - earth_radius_m;
     }
 
-    double skin_to_internal_kelvin(double skin_temperature_k, double ambient_temperature_k)
+    double eclipse_fraction_beta(double beta_rad, double earth_radius_m, double altitude_m, double &beta_critical_rad)
     {
-        return ambient_temperature_k + TCS_INTERNAL_SKIN_FRACTION * (skin_temperature_k - ambient_temperature_k);
+        beta_rad = std::fabs(beta_rad);
+        beta_critical_rad = std::asin(earth_radius_m / (earth_radius_m + altitude_m));
+
+        if (beta_rad >= beta_critical_rad)
+        {
+            return 0.0;
+        }
+
+        double eclipse_argument =
+            std::sqrt(altitude_m * altitude_m + 2.0 * earth_radius_m * altitude_m) /
+            ((earth_radius_m + altitude_m) * std::cos(beta_rad));
+        eclipse_argument = std::max(-1.0, std::min(1.0, eclipse_argument));
+        return std::acos(eclipse_argument) / TCS_PI;
+    }
+
+    ThermalModelParameters build_thermal_model(void)
+    {
+        ThermalModelParameters params{};
+
+        const double alpha = TCS_PV_FRACTION * TCS_ALPHA_PV + (1.0 - TCS_PV_FRACTION) * TCS_ALPHA_PAINT;
+        const double emissivity = TCS_PV_FRACTION * TCS_EPSILON_PV + (1.0 - TCS_PV_FRACTION) * TCS_EPSILON_PAINT;
+        const double skin_mass_kg = TCS_SKIN_MASS_FRACTION * TCS_TOTAL_MASS_KG;
+        const double internal_mass_kg = TCS_TOTAL_MASS_KG - skin_mass_kg;
+
+        params.orbit_period_s = TCS_ORBIT_PERIOD_SECONDS;
+        params.beta_rad = deg_to_rad(TCS_BETA_DEG);
+        params.penumbra_s = TCS_PENUMBRA_SECONDS;
+        params.sigma = TCS_STEFAN_BOLTZMANN;
+        params.earth_gm_m3_per_s2 = TCS_EARTH_GM_M3_PER_S2;
+        params.earth_radius_m = TCS_EARTH_RADIUS_M;
+        params.solar_constant_w_per_m2 = TCS_SOLAR_CONSTANT_W_PER_M2;
+        params.earth_albedo_factor = TCS_EARTH_ALBEDO_FACTOR;
+        params.earth_effective_temperature_k = TCS_EARTH_EFFECTIVE_TEMPERATURE_K;
+        params.total_external_area_m2 =
+            2.0 * (TCS_CUBESAT_WIDTH_M * TCS_CUBESAT_HEIGHT_M +
+                   TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_HEIGHT_M +
+                   TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_WIDTH_M);
+        params.face_normals = {{
+            {{ 1.0,  0.0,  0.0}},
+            {{-1.0,  0.0,  0.0}},
+            {{ 0.0,  1.0,  0.0}},
+            {{ 0.0, -1.0,  0.0}},
+            {{ 0.0,  0.0,  1.0}},
+            {{ 0.0,  0.0, -1.0}}
+        }};
+        params.face_areas_m2 = {{
+            TCS_CUBESAT_WIDTH_M * TCS_CUBESAT_HEIGHT_M,
+            TCS_CUBESAT_WIDTH_M * TCS_CUBESAT_HEIGHT_M,
+            TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_HEIGHT_M,
+            TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_HEIGHT_M,
+            TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_WIDTH_M,
+            TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_WIDTH_M
+        }};
+        params.absorptivity = alpha;
+        params.emissivity = emissivity;
+        params.skin_heat_capacity_j_per_k = skin_mass_kg * TCS_SPECIFIC_HEAT_J_PER_KG_K;
+        params.internal_heat_capacity_j_per_k = internal_mass_kg * TCS_SPECIFIC_HEAT_J_PER_KG_K;
+        params.thermal_conductance_w_per_k = TCS_CONTACT_H_W_PER_M2_K * TCS_CONTACT_AREA_M2;
+
+        orbit_from_period(params.orbit_period_s, params.earth_gm_m3_per_s2, params.earth_radius_m,
+                          params.orbital_altitude_m, params.orbital_semi_major_axis_m);
+        params.eclipse_fraction =
+            eclipse_fraction_beta(params.beta_rad, params.earth_radius_m, params.orbital_altitude_m,
+                                  params.beta_critical_rad);
+        params.max_earth_view_factor =
+            std::pow(params.earth_radius_m / (params.earth_radius_m + params.orbital_altitude_m), 2.0);
+
+        return params;
+    }
+
+    const ThermalModelParameters &thermal_model(void)
+    {
+        static const ThermalModelParameters params = build_thermal_model();
+        return params;
+    }
+
+    double sun_factor_penumbra(double tau_s, const ThermalModelParameters &params)
+    {
+        if (params.eclipse_fraction <= 0.0)
+        {
+            return 1.0;
+        }
+
+        const double eclipse_duration_s = params.eclipse_fraction * params.orbit_period_s;
+        const double eclipse_start_s = 0.5 * params.orbit_period_s - 0.5 * eclipse_duration_s;
+        const double eclipse_end_s = 0.5 * params.orbit_period_s + 0.5 * eclipse_duration_s;
+        const double transition_s = std::min(params.penumbra_s, 0.5 * eclipse_duration_s);
+
+        if (transition_s <= 0.0)
+        {
+            return (tau_s >= eclipse_start_s && tau_s <= eclipse_end_s) ? 0.0 : 1.0;
+        }
+
+        if ((tau_s < eclipse_start_s - transition_s / 2.0) || (tau_s > eclipse_end_s + transition_s / 2.0))
+        {
+            return 1.0;
+        }
+
+        if ((tau_s >= eclipse_start_s + transition_s / 2.0) && (tau_s <= eclipse_end_s - transition_s / 2.0))
+        {
+            return 0.0;
+        }
+
+        if ((tau_s >= eclipse_start_s - transition_s / 2.0) && (tau_s < eclipse_start_s + transition_s / 2.0))
+        {
+            const double x = (tau_s - (eclipse_start_s - transition_s / 2.0)) / transition_s;
+            return 0.5 * (1.0 + std::cos(TCS_PI * x));
+        }
+
+        const double x = (tau_s - (eclipse_end_s - transition_s / 2.0)) / transition_s;
+        return 0.5 * (1.0 - std::cos(TCS_PI * x));
+    }
+
+    std::array<double, 3> sun_vector_to_sun(double tau_s, const ThermalModelParameters &params)
+    {
+        const double orbital_phase_rad = 2.0 * TCS_PI * tau_s / params.orbit_period_s;
+        return {{
+            std::cos(params.beta_rad) * std::sin(orbital_phase_rad),
+            std::sin(params.beta_rad),
+            -std::cos(params.beta_rad) * std::cos(orbital_phase_rad)
+        }};
+    }
+
+    double projected_area_to_sun(const ThermalModelParameters &params, const std::array<double, 3> &sun_vector)
+    {
+        switch (TCS_ATTITUDE_MODE)
+        {
+            case TCS_ATTITUDE_NADIR:
+            {
+                double projected_area_m2 = 0.0;
+                for (std::size_t face = 0; face < params.face_normals.size(); ++face)
+                {
+                    projected_area_m2 +=
+                        params.face_areas_m2[face] * std::max(0.0, dot_product(params.face_normals[face], sun_vector));
+                }
+                return projected_area_m2;
+            }
+
+            case TCS_ATTITUDE_WORST_HOT:
+                return std::max({TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_WIDTH_M,
+                                 TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_HEIGHT_M,
+                                 TCS_CUBESAT_WIDTH_M * TCS_CUBESAT_HEIGHT_M});
+
+            case TCS_ATTITUDE_WORST_COLD:
+                return std::min({TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_WIDTH_M,
+                                 TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_HEIGHT_M,
+                                 TCS_CUBESAT_WIDTH_M * TCS_CUBESAT_HEIGHT_M});
+
+            case TCS_ATTITUDE_TUMBLING_MEAN:
+                return params.total_external_area_m2 / 4.0;
+        }
+
+        return 0.0;
+    }
+
+    ThermalDerivatives thermal_derivatives(double simulation_time_s, const ThermalState &state, bool heater_enabled)
+    {
+        const ThermalModelParameters &params = thermal_model();
+        double tau_s = std::fmod(simulation_time_s, params.orbit_period_s);
+        if (tau_s < 0.0)
+        {
+            tau_s += params.orbit_period_s;
+        }
+
+        const double sun_factor = sun_factor_penumbra(tau_s, params);
+        const std::array<double, 3> sun_vector = sun_vector_to_sun(tau_s, params);
+        const double projected_solar_area_m2 = projected_area_to_sun(params, sun_vector);
+        const double solar_heat_w =
+            params.absorptivity * params.solar_constant_w_per_m2 * projected_solar_area_m2 * sun_factor;
+
+        const std::array<double, 3> earth_vector = {{0.0, 0.0, 1.0}};
+        double albedo_heat_w = 0.0;
+        double earth_ir_heat_w = 0.0;
+        for (std::size_t face = 0; face < params.face_normals.size(); ++face)
+        {
+            const double cos_earth = std::max(0.0, dot_product(params.face_normals[face], earth_vector));
+            const double face_view_factor = params.max_earth_view_factor * cos_earth;
+
+            albedo_heat_w +=
+                (params.absorptivity * params.solar_constant_w_per_m2 * params.earth_albedo_factor * face_view_factor) *
+                params.face_areas_m2[face];
+            earth_ir_heat_w +=
+                (params.sigma * params.emissivity * std::pow(params.earth_effective_temperature_k, 4.0) *
+                 face_view_factor) *
+                params.face_areas_m2[face];
+        }
+        albedo_heat_w *= sun_factor;
+
+        const double internal_heat_w =
+            TCS_INTERNAL_POWER_ECLIPSE_W +
+            (TCS_INTERNAL_POWER_SUNLIGHT_W - TCS_INTERNAL_POWER_ECLIPSE_W) * sun_factor;
+        const double heater_heat_w = heater_enabled ? TCS_HEATER_POWER_W : 0.0;
+        const double radiated_heat_w =
+            params.emissivity * params.sigma * params.total_external_area_m2 *
+            std::pow(state.skin_temperature_k, 4.0);
+        const double conduction_heat_w =
+            params.thermal_conductance_w_per_k * (state.internal_temperature_k - state.skin_temperature_k);
+
+        ThermalDerivatives derivatives{};
+        derivatives.d_skin_k_per_s =
+            (solar_heat_w + albedo_heat_w + earth_ir_heat_w + conduction_heat_w - radiated_heat_w) /
+            params.skin_heat_capacity_j_per_k;
+        derivatives.d_internal_k_per_s =
+            (internal_heat_w + heater_heat_w - conduction_heat_w) / params.internal_heat_capacity_j_per_k;
+        return derivatives;
+    }
+
+    ThermalState rk4_step(double simulation_time_s, double step_s, const ThermalState &state, bool heater_enabled)
+    {
+        const ThermalDerivatives k1 = thermal_derivatives(simulation_time_s, state, heater_enabled);
+
+        const ThermalState state_k2 = {
+            state.skin_temperature_k + 0.5 * step_s * k1.d_skin_k_per_s,
+            state.internal_temperature_k + 0.5 * step_s * k1.d_internal_k_per_s
+        };
+        const ThermalDerivatives k2 = thermal_derivatives(simulation_time_s + step_s / 2.0, state_k2, heater_enabled);
+
+        const ThermalState state_k3 = {
+            state.skin_temperature_k + 0.5 * step_s * k2.d_skin_k_per_s,
+            state.internal_temperature_k + 0.5 * step_s * k2.d_internal_k_per_s
+        };
+        const ThermalDerivatives k3 = thermal_derivatives(simulation_time_s + step_s / 2.0, state_k3, heater_enabled);
+
+        const ThermalState state_k4 = {
+            state.skin_temperature_k + step_s * k3.d_skin_k_per_s,
+            state.internal_temperature_k + step_s * k3.d_internal_k_per_s
+        };
+        const ThermalDerivatives k4 = thermal_derivatives(simulation_time_s + step_s, state_k4, heater_enabled);
+
+        return {
+            state.skin_temperature_k +
+                (step_s / 6.0) *
+                    (k1.d_skin_k_per_s + 2.0 * k2.d_skin_k_per_s + 2.0 * k3.d_skin_k_per_s + k4.d_skin_k_per_s),
+            state.internal_temperature_k +
+                (step_s / 6.0) * (k1.d_internal_k_per_s + 2.0 * k2.d_internal_k_per_s +
+                                  2.0 * k3.d_internal_k_per_s + k4.d_internal_k_per_s)
+        };
+    }
+
+    bool thermal_state_is_valid(const ThermalState &state)
+    {
+        return std::isfinite(state.skin_temperature_k) && std::isfinite(state.internal_temperature_k) &&
+               state.skin_temperature_k > 0.0 && state.internal_temperature_k > 0.0 &&
+               state.skin_temperature_k < 1000.0 && state.internal_temperature_k < 1000.0;
     }
 
     float kelvin_to_telemetry_kelvin(double temperature_k)
@@ -222,13 +538,12 @@ namespace Nos3
     void TcsHardwareModel::reset_thermal_state(void)
     {
         _simulation_time_seconds = 0.0;
-        _ambient_temperature_k   = ambient_temp(_simulation_time_seconds);
-        _skin_temperature_k     = celsius_to_kelvin(TCS_INITIAL_TEMPERATURE_C);
-        _internal_temperature_k = skin_to_internal_kelvin(_skin_temperature_k, _ambient_temperature_k);
-        _lower_threshold_c      = TCS_LOWER_THRESHOLD_C;
-        _upper_threshold_c      = TCS_UPPER_THRESHOLD_C;
-        _heater_state           = TCS_HEATER_STATE_OFF;
-        _control_mode           = TCS_CONTROL_MODE_AUTO;
+        _skin_temperature_k = TCS_INITIAL_SKIN_TEMPERATURE_K;
+        _internal_temperature_k = TCS_INITIAL_INTERNAL_TEMPERATURE_K;
+        _lower_threshold_k = TCS_LOWER_THRESHOLD_K;
+        _upper_threshold_k = TCS_UPPER_THRESHOLD_K;
+        _heater_state = TCS_HEATER_STATE_OFF;
+        _control_mode = TCS_CONTROL_MODE_AUTO;
     }
 
 
@@ -249,45 +564,51 @@ namespace Nos3
 
     void TcsHardwareModel::update_thermal_state(double dt)
     {
-        const double t = _simulation_time_seconds;
-        const double T_ambient = ambient_temp(t);
+        const double previous_internal_temperature_k = _internal_temperature_k;
+        const double previous_skin_temperature_k = _skin_temperature_k;
+        double remaining_seconds = dt;
 
-        _internal_temperature_k = skin_to_internal_kelvin(_skin_temperature_k, T_ambient);
-
-        const double current_temperature_c = kelvin_to_celsius(_internal_temperature_k);
-
-        if (_control_mode == TCS_CONTROL_MODE_AUTO)
+        /* Integrate the user-provided two-node orbital model in 1-second chunks for stable heater hysteresis. */
+        while (remaining_seconds > 0.0)
         {
-            if (current_temperature_c <= _lower_threshold_c)
+            if (_control_mode == TCS_CONTROL_MODE_AUTO)
             {
-                _heater_state = TCS_HEATER_STATE_ON;
+                if (_internal_temperature_k < _lower_threshold_k)
+                {
+                    _heater_state = TCS_HEATER_STATE_ON;
+                }
+                else if (_internal_temperature_k > _upper_threshold_k)
+                {
+                    _heater_state = TCS_HEATER_STATE_OFF;
+                }
             }
-            else if (current_temperature_c >= _upper_threshold_c)
+
+            const double step_seconds = std::min(remaining_seconds, TCS_INTEGRATION_STEP_SECONDS);
+            const ThermalState current_state = {_skin_temperature_k, _internal_temperature_k};
+            const ThermalState next_state =
+                rk4_step(_simulation_time_seconds, step_seconds, current_state,
+                         _heater_state == TCS_HEATER_STATE_ON);
+
+            if (!thermal_state_is_valid(next_state))
             {
-                _heater_state = TCS_HEATER_STATE_OFF;
+                sim_logger->warning("TcsHardwareModel::update_thermal_state: invalid temperature state computed at t=%.3fs. Retaining previous thermal state.", _simulation_time_seconds);
+                _internal_temperature_k = previous_internal_temperature_k;
+                _skin_temperature_k = previous_skin_temperature_k;
+                return;
             }
+
+            _simulation_time_seconds += step_seconds;
+            _skin_temperature_k = next_state.skin_temperature_k;
+            _internal_temperature_k = next_state.internal_temperature_k;
+            remaining_seconds -= step_seconds;
         }
 
-        const double T = _skin_temperature_k;
-        const double Q_in = (_heater_state == TCS_HEATER_STATE_ON) ? TCS_HEATER_POWER_W : 0.0;
-        const double epsilon = TCS_THERMAL_EMISSIVITY;
-        const double sigma = TCS_STEFAN_BOLTZMANN;
-        const double A = TCS_RADIATING_AREA_M2;
-        const double C_th = TCS_THERMAL_CAPACITANCE_J_PER_K;
-        const double Q_rad = epsilon * sigma * A * (pow(T, 4) - pow(T_ambient, 4));
-        const double dTdt = (Q_in - Q_rad) / C_th;
-        double T_next = T + dt * dTdt;
-
-        if (!std::isfinite(T_next))
+        if (!std::isfinite(_internal_temperature_k) || !std::isfinite(_skin_temperature_k))
         {
-            sim_logger->warning("TcsHardwareModel::update_thermal_state: non-finite skin temperature computed at t=%.3fs. Retaining previous state.", t);
-            T_next = T;
+            sim_logger->warning("TcsHardwareModel::update_thermal_state: non-finite temperature computed at t=%.3fs. Retaining previous thermal state.", _simulation_time_seconds);
+            _internal_temperature_k = previous_internal_temperature_k;
+            _skin_temperature_k = previous_skin_temperature_k;
         }
-
-        _skin_temperature_k = T_next;
-        _simulation_time_seconds += dt;
-        _ambient_temperature_k = ambient_temp(_simulation_time_seconds);
-        _internal_temperature_k = skin_to_internal_kelvin(_skin_temperature_k, _ambient_temperature_k);
     }
 
 
@@ -329,11 +650,11 @@ namespace Nos3
     void TcsHardwareModel::create_tcs_data(std::vector<uint8_t>& out_data)
     {
         float current_temperature_k = kelvin_to_telemetry_kelvin(_internal_temperature_k);
-        std::uint16_t lower_threshold     = static_cast<std::uint16_t>(_lower_threshold_c);
-        std::uint16_t upper_threshold     = static_cast<std::uint16_t>(_upper_threshold_c);
-        float ambient_temperature_k = kelvin_to_telemetry_kelvin(_ambient_temperature_k);
+        float skin_temperature_k = kelvin_to_telemetry_kelvin(_skin_temperature_k);
+        std::uint16_t lower_threshold = static_cast<std::uint16_t>(std::lround(_lower_threshold_k));
+        std::uint16_t upper_threshold = static_cast<std::uint16_t>(std::lround(_upper_threshold_k));
         std::uint32_t current_temperature = float_to_u32_bits(current_temperature_k);
-        std::uint32_t ambient_temperature = float_to_u32_bits(ambient_temperature_k);
+        std::uint32_t skin_temperature = float_to_u32_bits(skin_temperature_k);
 
         /* Prepare data size */
         out_data.resize(22, 0x00);
@@ -359,13 +680,14 @@ namespace Nos3
         out_data[13] = upper_threshold & 0x00FF;
         out_data[14] = _heater_state;
         out_data[15] = _control_mode;
-        out_data[16] = (ambient_temperature >> 24) & 0x000000FF;
-        out_data[17] = (ambient_temperature >> 16) & 0x000000FF;
-        out_data[18] = (ambient_temperature >> 8) & 0x000000FF;
-        out_data[19] = ambient_temperature & 0x000000FF;
+        out_data[16] = (skin_temperature >> 24) & 0x000000FF;
+        out_data[17] = (skin_temperature >> 16) & 0x000000FF;
+        out_data[18] = (skin_temperature >> 8) & 0x000000FF;
+        out_data[19] = skin_temperature & 0x000000FF;
 
-        sim_logger->debug("TcsHardwareModel::create_tcs_data: internal=%.3fK skin=%.3fK lower=%dC upper=%dC heater=%u mode=%u ambient=%.3fK.",
-            static_cast<double>(current_temperature_k), _skin_temperature_k, _lower_threshold_c, _upper_threshold_c, _heater_state, _control_mode, static_cast<double>(ambient_temperature_k));
+        sim_logger->debug("TcsHardwareModel::create_tcs_data: internal=%.3fK skin=%.3fK lower=%uK upper=%uK heater=%u mode=%u.",
+            static_cast<double>(current_temperature_k), _skin_temperature_k, static_cast<unsigned int>(lower_threshold),
+            static_cast<unsigned int>(upper_threshold), _heater_state, _control_mode);
 
         /* Streaming data trailer - 0xBEEF */
         out_data[20] = 0xBE;

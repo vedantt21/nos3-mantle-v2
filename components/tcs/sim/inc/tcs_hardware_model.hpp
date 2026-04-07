@@ -28,9 +28,10 @@
 #define TCS_CONTROL_MODE_MANUAL 0
 #define TCS_CONTROL_MODE_AUTO   1
 
-#define TCS_INITIAL_TEMPERATURE_C 20
-#define TCS_LOWER_THRESHOLD_C     0
-#define TCS_UPPER_THRESHOLD_C     50
+#define TCS_INITIAL_SKIN_TEMPERATURE_K     293.0
+#define TCS_INITIAL_INTERNAL_TEMPERATURE_K 293.0
+#define TCS_LOWER_THRESHOLD_K              273.0
+#define TCS_UPPER_THRESHOLD_K              283.0
 
 
 /*
@@ -66,11 +67,10 @@ namespace Nos3
         std::uint32_t                                       _count;
         std::uint32_t                                       _config;
         std::uint32_t                                       _status;
-        double                                              _ambient_temperature_k;
         double                                              _skin_temperature_k;
         double                                              _internal_temperature_k;
-        std::int16_t                                        _lower_threshold_c;
-        std::int16_t                                        _upper_threshold_c;
+        double                                              _lower_threshold_k;
+        double                                              _upper_threshold_k;
         std::uint8_t                                        _heater_state;
         std::uint8_t                                        _control_mode;
         double                                              _simulation_time_seconds;
