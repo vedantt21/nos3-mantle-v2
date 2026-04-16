@@ -5,6 +5,15 @@
 ** Purpose:
 **  Define TCS application commands and telemetry messages
 **
+** Implementation Notes:
+**   OpenC3 command definitions, XTCE command definitions, unit tests, and
+**   TCS_ProcessGroundCommand() all depend on the numeric command-code values
+**   below.  Changing any value requires updating:
+**     components/tcs/gsw/TCS/cmd_tlm/TCS_CMD.txt
+**     components/tcs/gsw/tcs.xtce
+**     components/tcs/fsw/cfs/src/tcs_app.c
+**     components/tcs/fsw/cfs/unit-test/coveragetest/coveragetest_tcs_app.c
+**
 *******************************************************************************/
 #ifndef _TCS_MSG_H_
 #define _TCS_MSG_H_
@@ -14,7 +23,9 @@
 
 /*
 ** Ground Command Codes
-** TODO: Add additional commands required by the specific component
+** The heater commands are no-argument cFS commands.  HEATER_ENABLE and
+** HEATER_DISABLE force MANUAL mode before writing the heater state; HEATER_AUTO
+** only writes AUTO mode and lets the simulator apply threshold hysteresis.
 */
 #define TCS_NOOP_CC           0
 #define TCS_RESET_COUNTERS_CC 1
@@ -58,9 +69,19 @@ typedef struct
 typedef struct
 {
     CFE_MSG_TelemetryHeader_t TlmHeader;
+    /*
+    ** Tcs is the UART device payload decoded in tcs_device.c.  It contains the
+    ** internal temperature, Kelvin thresholds, heater state, control mode, and
+    ** skin temperature produced by the simulator's two-node thermal model.
+    */
     TCS_Device_Data_tlm_t  Tcs;
 
     /* TODO: This is specific to the tcs application, remove if using template generator */
+    /*
+    ** These two fields are copied from MGR HK in TCS_ProcessMgrHk().  They are
+    ** appended after the TCS device bytes so the packet still starts with the
+    ** exact TCS_Device_Data_tlm_t layout expected by OpenC3/XTCE.
+    */
     uint16 PassNumber;
     uint8  RegionStatus;
 
@@ -79,9 +100,15 @@ typedef struct
     uint8                     DeviceCount;
 
     /*
-    ** TODO: Edit and add specific telemetry values to this struct
+    ** DeviceEnabled is app-side UART state: ENABLED means TCS_Enable opened the
+    ** port successfully, not that the heater is on.  Heater state is reported
+    ** inside DeviceHK/data telemetry from the simulator.
     */
     uint8                  DeviceEnabled;
+    /*
+    ** DeviceHK mirrors the 16-byte simulator housekeeping response after the
+    ** 0xDEAD header and before the 0xBEEF trailer are stripped by tcs_device.c.
+    */
     TCS_Device_HK_tlm_t DeviceHK;
 
 } __attribute__((packed)) TCS_Hk_tlm_t;

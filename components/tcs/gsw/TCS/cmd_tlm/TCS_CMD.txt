@@ -1,3 +1,13 @@
+# Implementation notes:
+# These command definitions mirror the cFS command codes in tcs_msg.h.
+# To recreate the functioning TCS command path, keep each CCSDS_FC value
+# synchronized with TCS_ProcessGroundCommand() and the XTCE file:
+#   HEATER_ENABLE  -> FC 2, app sends MANUAL then heater ON over UART
+#   HEATER_DISABLE -> FC 3, app sends MANUAL then heater OFF over UART
+#   TCS_CONFIG_CC  -> FC 4, app forwards DEVICE_CONFIG as a 32-bit payload
+#   TCS_ENABLE     -> FC 5, app opens the TCS UART
+#   TCS_DISABLE    -> FC 6, app commands MANUAL/OFF then closes UART
+#   HEATER_AUTO    -> FC 7, app sends AUTO mode and leaves hysteresis to sim
 COMMAND TCS TCS_NOOP_CC <%= CosmosCfsConfig::PROCESSOR_ENDIAN %> "Tcs NOOP Command"
   APPEND_PARAMETER CCSDS_STREAMID      16 UINT MIN_UINT16 MAX_UINT16 0x18F1 "CCSDS Packet Identification" BIG_ENDIAN
   APPEND_PARAMETER CCSDS_SEQUENCE      16 UINT MIN_UINT16 MAX_UINT16 0xC000 "CCSDS Packet Sequence Control" BIG_ENDIAN

@@ -4,6 +4,13 @@
 ** Purpose:
 **   This is the main header file for the TCS application.
 **
+** Implementation Notes:
+**   This header exposes the app-level functions that were added for the
+**   functioning TCS model.  The matching command codes live in tcs_msg.h, the
+**   event IDs live in tcs_events.h, and the UART opcodes live in tcs_device.h.
+**   Recreating the implementation means keeping those four files synchronized:
+**   command code -> prototype -> dispatcher case -> event IDs -> device opcode.
+**
 *******************************************************************************/
 #ifndef _TCS_APP_H_
 #define _TCS_APP_H_
@@ -93,7 +100,9 @@ void  TCS_ReportHousekeeping(void);
 void  TCS_ReportDeviceTelemetry(void);
 void  TCS_ResetCounters(void);
 void  TCS_HeaterEnable(void);
+/* Manual heater OFF entry point for TCS_HEATER_DISABLE_CC. */
 void  TCS_HeaterDisable(void);
+/* AUTO-mode entry point for TCS_HEATER_AUTO_CC. */
 void  TCS_HeaterAuto(void);
 void  TCS_Enable(void);
 void  TCS_Disable(void);

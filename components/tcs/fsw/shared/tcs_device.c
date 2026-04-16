@@ -4,6 +4,13 @@
 ** Purpose:
 **   This file contains the source code for the TCS device.
 **
+** Implementation Notes:
+**   The functioning TCS model made the device packet a direct mirror of the
+**   simulator's thermal state: current/internal temperature, Kelvin thresholds,
+**   heater state, control mode, and skin temperature.  All multi-byte fields on
+**   the UART link are sent most-significant byte first, so this file manually
+**   reconstructs integers and floats before cFS publishes telemetry.
+**
 *******************************************************************************/
 
 /*
@@ -17,6 +24,11 @@ static float TCS_UnpackFloatBE(const uint8_t *data)
     uint32_t raw = 0;
     float value = 0.0f;
 
+    /*
+    ** Rebuild the four UART bytes into the exact IEEE-754 bit pattern produced
+    ** by the simulator.  memcpy is used instead of a pointer cast so strict
+    ** aliasing rules and alignment do not corrupt the float conversion.
+    */
     raw = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) | ((uint32_t)data[2] << 8) | ((uint32_t)data[3]);
     memcpy(&value, &raw, sizeof(value));
 
@@ -79,7 +91,13 @@ int32_t TCS_CommandDevice(uart_info_t *device, uint8_t cmd_code, uint32_t payloa
     uint8_t write_data[TCS_DEVICE_CMD_SIZE];
     uint8_t read_data[TCS_DEVICE_DATA_SIZE];
 
-    /* Prepare command */
+    /*
+    ** Prepare the 9-byte command frame expected by tcs_hardware_model.cpp:
+    ** 0xDEAD header, one opcode byte, four big-endian payload bytes, then
+    ** 0xBEEF trailer.  For mode/heater commands only the final payload byte is
+    ** meaningful, but keeping a 32-bit payload makes config and future commands
+    ** share the same frame shape.
+    */
     write_data[0] = TCS_DEVICE_HDR_0;
     write_data[1] = TCS_DEVICE_HDR_1;
     write_data[2] = cmd_code;
@@ -94,7 +112,11 @@ int32_t TCS_CommandDevice(uart_info_t *device, uint8_t cmd_code, uint32_t payloa
     status = uart_flush(device);
     if (status == UART_SUCCESS)
     {
-        /* Write data */
+        /*
+        ** The simulator echoes a valid command frame before returning any HK or
+        ** data packet.  The echo check below is the app-side acknowledgement
+        ** that the simulator accepted the opcode and payload.
+        */
         bytes = uart_write_port(device, write_data, TCS_DEVICE_CMD_SIZE);
 #ifdef TCS_CFG_DEBUG
         OS_printf("  TCS_CommandDevice[%d] = ", bytes);
@@ -216,11 +238,15 @@ int32_t TCS_RequestData(uart_info_t *device, TCS_Device_Data_tlm_t *data)
     int32_t status = OS_SUCCESS;
     uint8_t read_data[TCS_DEVICE_DATA_SIZE];
 
-    /* Command device to send HK */
+    /*
+    ** Ask for the 22-byte data packet.  The command echo is consumed by
+    ** TCS_CommandDevice(); the following read consumes only the telemetry:
+    ** [DE AD] counter currentK lowerK upperK heater mode skinK [BE EF].
+    */
     status = TCS_CommandDevice(device, TCS_DEVICE_REQ_DATA_CMD, 0);
     if (status == OS_SUCCESS)
     {
-        /* Read HK data */
+        /* Read the simulator data packet after the command echo. */
         status = TCS_ReadData(device, read_data, sizeof(read_data));
         if (status == OS_SUCCESS)
         {
@@ -233,10 +259,24 @@ int32_t TCS_RequestData(uart_info_t *device, TCS_Device_Data_tlm_t *data)
             OS_printf("\n");
 #endif
 
-            /* Verify data header and trailer */
+            /*
+            ** Verify data header and trailer before unpacking by offset.  If
+            ** either sentinel is wrong, the packet could be shifted and every
+            ** field below would be decoded into the wrong telemetry item.
+            */
             if ((read_data[0] == TCS_DEVICE_HDR_0) && (read_data[1] == TCS_DEVICE_HDR_1) &&
                 (read_data[20] == TCS_DEVICE_TRAILER_0) && (read_data[21] == TCS_DEVICE_TRAILER_1))
             {
+                /*
+                ** Byte map for recreation:
+                **   02-05: device counter, uint32, big-endian
+                **   06-09: internal/current temperature, IEEE-754 float, K
+                **   10-11: lower AUTO threshold, int16, K
+                **   12-13: upper AUTO threshold, int16, K
+                **   14:    heater state, 0 OFF / 1 ON
+                **   15:    control mode, 0 MANUAL / 1 AUTO
+                **   16-19: skin temperature, IEEE-754 float, K
+                */
                 data->DeviceCounter = read_data[2] << 24;
                 data->DeviceCounter |= read_data[3] << 16;
                 data->DeviceCounter |= read_data[4] << 8;

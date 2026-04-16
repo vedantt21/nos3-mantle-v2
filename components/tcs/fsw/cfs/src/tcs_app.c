@@ -4,6 +4,21 @@
 ** Purpose:
 **   This file contains the source code for the TCS application.
 **
+** Implementation Notes:
+**   The functioning TCS model added three important pieces of behavior:
+**   1. Manual heater disable, so operators can force the heater off without
+**      disabling the whole TCS device link.
+**   2. Automatic heater mode, so the simulator can own heater hysteresis
+**      around the lower and upper Kelvin thresholds.
+**   3. A disable sequence that first commands MANUAL/OFF before closing UART,
+**      which leaves the simulated hardware in a non-heating state if the app
+**      is stopped or disabled.
+**
+**   The comments below intentionally describe the command path in detail:
+**   OpenC3 sends a command code, cFE routes it here, this file validates the
+**   packet length, then the UART driver in tcs_device.c sends the matching
+**   device command bytes to the simulator.
+**
 *******************************************************************************/
 
 /*
@@ -326,6 +341,9 @@ void TCS_ProcessGroundCommand(void)
 
         /*
         ** Heater Enable Command
+        ** Command code 2 moves the device into MANUAL mode and then turns the
+        ** heater ON.  It remains a no-argument command because the only user
+        ** choice is the command code itself.
         */
         case TCS_HEATER_ENABLE_CC:
             if (TCS_VerifyCmdLength(TCS_AppData.MsgPtr, sizeof(TCS_NoArgs_cmd_t)) == OS_SUCCESS)
@@ -339,6 +357,9 @@ void TCS_ProcessGroundCommand(void)
 
         /*
         ** Heater Disable Command
+        ** Command code 3 was added as the manual OFF companion to
+        ** HEATER_ENABLE.  This does not disable UART or the TCS app; it only
+        ** asks the device/simulator to enter MANUAL mode with the heater OFF.
         */
         case TCS_HEATER_DISABLE_CC:
             if (TCS_VerifyCmdLength(TCS_AppData.MsgPtr, sizeof(TCS_NoArgs_cmd_t)) == OS_SUCCESS)
@@ -352,6 +373,9 @@ void TCS_ProcessGroundCommand(void)
 
         /*
         ** Heater Auto Command
+        ** Command code 7 returns control to the thermal model.  Once AUTO is
+        ** set, the simulator turns the heater on below the lower threshold and
+        ** off above the upper threshold, so no heater-state argument is needed.
         */
         case TCS_HEATER_AUTO_CC:
             if (TCS_VerifyCmdLength(TCS_AppData.MsgPtr, sizeof(TCS_NoArgs_cmd_t)) == OS_SUCCESS)
@@ -579,16 +603,32 @@ void TCS_ResetCounters(void)
 
 static int32 TCS_SetControlMode(uint8_t control_mode)
 {
+    /*
+    ** Keep mode-setting in one wrapper so every caller uses the same device
+    ** opcode (TCS_DEVICE_SET_MODE_CMD, byte value 0x04) and payload format.
+    ** The low byte of `control_mode` becomes the last payload byte on UART.
+    */
     return TCS_CommandDevice(&TCS_AppData.TcsUart, TCS_DEVICE_SET_MODE_CMD, control_mode);
 }
 
 static int32 TCS_SetHeaterState(uint8_t heater_state)
 {
+    /*
+    ** Keep heater-state writes separate from mode writes.  Recreating this
+    ** behavior requires sending opcode 0x05 after any manual mode command,
+    ** with payload 0 for OFF or 1 for ON.
+    */
     return TCS_CommandDevice(&TCS_AppData.TcsUart, TCS_DEVICE_SET_HEATER_CMD, heater_state);
 }
 
 static int32 TCS_SetThermalControl(uint8_t control_mode, uint8_t heater_state)
 {
+    /*
+    ** Manual heater changes are intentionally two UART transactions:
+    ** first set MANUAL/AUTO state, then write the heater state only if the
+    ** mode command was acknowledged.  This prevents an ON/OFF write from being
+    ** accepted after a failed mode transition.
+    */
     int32 status = TCS_SetControlMode(control_mode);
     if (status == OS_SUCCESS)
     {
@@ -604,6 +644,10 @@ void TCS_HeaterEnable(void)
 {
     int32 device_status = OS_SUCCESS;
 
+    /*
+    ** Reject heater commands while disabled because TCS_AppData.TcsUart is not
+    ** guaranteed to hold an open UART handle until TCS_Enable succeeds.
+    */
     if (TCS_AppData.HkTelemetryPkt.DeviceEnabled != TCS_DEVICE_ENABLED)
     {
         TCS_AppData.HkTelemetryPkt.CommandErrorCount++;
@@ -615,6 +659,11 @@ void TCS_HeaterEnable(void)
 
     TCS_AppData.HkTelemetryPkt.CommandCount++;
 
+    /*
+    ** HEATER_ENABLE always forces MANUAL mode before ON.  That reproduces the
+    ** operator intent exactly and prevents AUTO hysteresis from immediately
+    ** overriding the manual heater state.
+    */
     device_status = TCS_SetThermalControl(TCS_CONTROL_MODE_MANUAL, TCS_HEATER_STATE_ON);
     if (device_status == OS_SUCCESS)
     {
@@ -640,6 +689,10 @@ void TCS_HeaterDisable(void)
 {
     int32 device_status = OS_SUCCESS;
 
+    /*
+    ** Same disabled-device guard as HEATER_ENABLE: there is no UART command to
+    ** send until the app has successfully opened the configured TCS port.
+    */
     if (TCS_AppData.HkTelemetryPkt.DeviceEnabled != TCS_DEVICE_ENABLED)
     {
         TCS_AppData.HkTelemetryPkt.CommandErrorCount++;
@@ -651,6 +704,11 @@ void TCS_HeaterDisable(void)
 
     TCS_AppData.HkTelemetryPkt.CommandCount++;
 
+    /*
+    ** HEATER_DISABLE deliberately leaves the TCS device enabled.  It sends
+    ** MANUAL/OFF so telemetry can continue flowing while the heater is forced
+    ** off for verification or operational safety.
+    */
     device_status = TCS_SetThermalControl(TCS_CONTROL_MODE_MANUAL, TCS_HEATER_STATE_OFF);
     if (device_status == OS_SUCCESS)
     {
@@ -676,6 +734,11 @@ void TCS_HeaterAuto(void)
 {
     int32 device_status = OS_SUCCESS;
 
+    /*
+    ** AUTO is only a mode command.  The simulator keeps the current heater
+    ** state until update_thermal_state() evaluates the thresholds on the next
+    ** time tick, so this function does not send an immediate heater payload.
+    */
     if (TCS_AppData.HkTelemetryPkt.DeviceEnabled != TCS_DEVICE_ENABLED)
     {
         TCS_AppData.HkTelemetryPkt.CommandErrorCount++;
@@ -758,9 +821,13 @@ void TCS_Disable(void)
         TCS_AppData.HkTelemetryPkt.CommandCount++;
 
         /*
-        ** Do the action, close hardware interface and set disabled
-        ** TODO: Make specific to your application depending on protocol in use
-        ** Note that other components provide examples for the different protocols
+        ** Disable is a two-step shutdown:
+        ** 1. Command MANUAL/OFF so the hardware model is left non-heating.
+        ** 2. Close the UART port and mark the app-side device state disabled.
+        **
+        ** The app still attempts to close UART if the heater-off command fails,
+        ** because an operator-requested disable should not be blocked by a
+        ** simulator command error.
         */
         device_status = TCS_SetThermalControl(TCS_CONTROL_MODE_MANUAL, TCS_HEATER_STATE_OFF);
         if (device_status == OS_SUCCESS)

@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Implementation notes:
+  This XTCE file is the OpenC3/ground-system mirror of the cFS TCS packet and
+  command definitions.  The functioning TCS model changed the data packet from
+  an ambient-only thermal signal to a two-node thermal packet:
+    CURRENT_TEMPERATURE is the internal/equipment node.
+    SKIN_TEMPERATURE is the external/shell node.
+    LOWER_THRESHOLD and UPPER_THRESHOLD are Kelvin AUTO-control thresholds.
+
+  Recreating the implementation requires the command function codes here to
+  match tcs_msg.h and TCS_CMD.txt, and the telemetry order here to match
+  TCS_Device_Data_tlm_t in tcs_device.h.
+-->
 <xtce:SpaceSystem xmlns:xtce="http://www.omg.org/spec/XTCE/20180204" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="TCS" xsi:schemaLocation="http://www.omg.org/spec/XTCE/20180204 https://www.omg.org/spec/XTCE/20180204/SpaceSystem.xsd">
   <xtce:SpaceSystem name="TCS_DATA_TLM">
     <xtce:TelemetryMetaData>
@@ -12,18 +25,21 @@
             <xtce:Unit>K</xtce:Unit>
           </xtce:UnitSet>
         </xtce:FloatParameterType>
+        <!-- AUTO mode turns heater ON below this Kelvin threshold. -->
         <xtce:IntegerParameterType name="LOWER_THRESHOLD_Type" shortDescription="Lower heater control threshold (K)" signed="true">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
           <xtce:UnitSet>
             <xtce:Unit>K</xtce:Unit>
           </xtce:UnitSet>
         </xtce:IntegerParameterType>
+        <!-- AUTO mode turns heater OFF above this Kelvin threshold. -->
         <xtce:IntegerParameterType name="UPPER_THRESHOLD_Type" shortDescription="Upper heater control threshold (K)" signed="true">
           <xtce:IntegerDataEncoding sizeInBits="16" encoding="twosComplement" byteOrder="leastSignificantByteFirst"/>
           <xtce:UnitSet>
             <xtce:Unit>K</xtce:Unit>
           </xtce:UnitSet>
         </xtce:IntegerParameterType>
+        <!-- Raw heater state serialized by create_tcs_data(): 0 OFF, 1 ON. -->
         <xtce:EnumeratedParameterType name="HEATER_STATE_Type" shortDescription="Heater state">
           <xtce:IntegerDataEncoding sizeInBits="8" encoding="unsigned"/>
           <xtce:EnumerationList>
@@ -31,6 +47,7 @@
             <xtce:Enumeration value="1" label="ON"/>
           </xtce:EnumerationList>
         </xtce:EnumeratedParameterType>
+        <!-- Raw control mode serialized by create_tcs_data(): 0 MANUAL, 1 AUTO. -->
         <xtce:EnumeratedParameterType name="CONTROL_MODE_Type" shortDescription="Thermal control mode">
           <xtce:IntegerDataEncoding sizeInBits="8" encoding="unsigned"/>
           <xtce:EnumerationList>
@@ -38,6 +55,7 @@
             <xtce:Enumeration value="1" label="AUTO"/>
           </xtce:EnumerationList>
         </xtce:EnumeratedParameterType>
+        <!-- External shell/skin node, replacing the earlier ambient field. -->
         <xtce:FloatParameterType name="SKIN_TEMPERATURE_Type" sizeInBits="32" shortDescription="Skin temperature (K)">
           <xtce:FloatDataEncoding sizeInBits="32" encoding="IEEE754_1985" byteOrder="leastSignificantByteFirst"/>
           <xtce:UnitSet>
@@ -65,6 +83,7 @@
       <xtce:ContainerSet>
         <xtce:SequenceContainer name="TCS_DATA_TLM" shortDescription="TCS_Device_tlm_t">
           <xtce:EntryList>
+            <!-- Entry order must match the packed TCS_Device_Data_tlm_t layout. -->
             <xtce:ParameterRefEntry parameterRef="DEVICE_COUNTER"/>
             <xtce:ParameterRefEntry parameterRef="CURRENT_TEMPERATURE"/>
             <xtce:ParameterRefEntry parameterRef="LOWER_THRESHOLD"/>
@@ -224,6 +243,7 @@
             <xtce:EntryList/>
           </xtce:CommandContainer>
         </xtce:MetaCommand>
+        <!-- FC 7 maps to TCS_HEATER_AUTO_CC and sends SET_MODE(AUTO) over UART. -->
         <xtce:MetaCommand name="HEATER_AUTO">
           <xtce:BaseMetaCommand metaCommandRef="/CCSDS/CCSDS_TC">
             <xtce:ArgumentAssignmentList>
@@ -248,6 +268,7 @@
             <xtce:EntryList/>
           </xtce:CommandContainer>
         </xtce:MetaCommand>
+        <!-- FC 6 maps to TCS_DISABLE_CC and shuts down by commanding heater OFF first. -->
         <xtce:MetaCommand name="TCS_DISABLE">
           <xtce:BaseMetaCommand metaCommandRef="/CCSDS/CCSDS_TC">
             <xtce:ArgumentAssignmentList>

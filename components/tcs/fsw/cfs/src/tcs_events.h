@@ -5,6 +5,12 @@
 ** Purpose:
 **  Define TCS application event IDs
 **
+** Implementation Notes:
+**   These IDs are what the coverage tests hook when they prove each command
+**   path was reached.  The heater events were added alongside the manual OFF
+**   and AUTO commands, so they must remain unique and stable for test logs and
+**   ground-system event decoding.
+**
 *************************************************************************/
 
 #ifndef _TCS_EVENTS_H_
@@ -29,6 +35,10 @@
 #define TCS_CMD_DISABLE_INF_EID 16
 #define TCS_DISABLE_INF_EID     17
 #define TCS_DISABLE_ERR_EID     18
+/*
+** Heater command events.  Each command has one information ID for successful
+** device acknowledgement and one error ID for disabled-device or UART failures.
+*/
 #define TCS_HEATER_ENABLE_INF_EID 24
 #define TCS_HEATER_ENABLE_ERR_EID 25
 #define TCS_HEATER_DISABLE_INF_EID 26

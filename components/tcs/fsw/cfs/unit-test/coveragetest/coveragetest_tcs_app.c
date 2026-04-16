@@ -32,6 +32,13 @@
 ** stub configurations, hook functions, and wrapper calls that
 ** are often needed when coercing certain code paths through
 ** complex functions.
+**
+** Implementation Notes:
+** The functioning TCS update added command coverage for HEATER_DISABLE and
+** HEATER_AUTO plus direct tests for the new helper functions. These tests do
+** not simulate orbital thermal physics; they prove the app dispatches command
+** codes, validates packet lengths, sends expected events, and handles UART
+** command failures.
 */
 
 /*
@@ -361,6 +368,10 @@ void Test_TCS_ProcessGroundCommand(void)
         TCS_NoArgs_cmd_t Noop;
         TCS_NoArgs_cmd_t Reset;
         TCS_NoArgs_cmd_t HeaterEnable;
+        /*
+         * HEATER_DISABLE and HEATER_AUTO are no-argument commands, so they use
+         * the same command-packet shape as NOOP, RESET, ENABLE, and DISABLE.
+         */
         TCS_NoArgs_cmd_t HeaterDisable;
         TCS_NoArgs_cmd_t HeaterAuto;
         TCS_NoArgs_cmd_t Enable;
@@ -449,7 +460,11 @@ void Test_TCS_ProcessGroundCommand(void)
     TCS_ProcessGroundCommand();
     UtAssert_True(EventTest.MatchCount == 1, "TCS_LEN_ERR_EID generated (%u)", (unsigned int)EventTest.MatchCount);
 
-    /* test dispatch of HEATER DISABLE */
+    /*
+     * test dispatch of HEATER DISABLE
+     * Recreates a valid FC=3 packet. Two TCS_CommandDevice successes are needed
+     * because the app sends SET_MODE(MANUAL) and then SET_HEATER(OFF).
+     */
     FcnCode = TCS_HEATER_DISABLE_CC;
     Size    = sizeof(TestMsg.HeaterDisable);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
@@ -462,7 +477,7 @@ void Test_TCS_ProcessGroundCommand(void)
     TCS_ProcessGroundCommand();
     UtAssert_True(EventTest.MatchCount == 1, "TCS_HEATER_DISABLE_INF_EID generated (%u)",
                   (unsigned int)EventTest.MatchCount);
-    /* test failure of command length */
+    /* test failure of command length before the device helper can run */
     FcnCode = TCS_HEATER_DISABLE_CC;
     Size    = sizeof(TestMsg.Config);
     UT_SetDataBuffer(UT_KEY(CFE_MSG_GetMsgId), &TestMsgId, sizeof(TestMsgId), false);
@@ -474,7 +489,11 @@ void Test_TCS_ProcessGroundCommand(void)
     TCS_ProcessGroundCommand();
     UtAssert_True(EventTest.MatchCount == 1, "TCS_LEN_ERR_EID generated (%u)", (unsigned int)EventTest.MatchCount);
 
-    /* test dispatch of HEATER AUTO */
+    /*
+     * test dispatch of HEATER AUTO
+     * Recreates a valid FC=7 packet. Only one TCS_CommandDevice success is
+     * needed because AUTO changes mode and does not write heater state.
+     */
     FcnCode = TCS_HEATER_AUTO_CC;
     Size    = sizeof(TestMsg.HeaterAuto);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
@@ -486,7 +505,7 @@ void Test_TCS_ProcessGroundCommand(void)
     TCS_ProcessGroundCommand();
     UtAssert_True(EventTest.MatchCount == 1, "TCS_HEATER_AUTO_INF_EID generated (%u)",
                   (unsigned int)EventTest.MatchCount);
-    /* test failure of command length */
+    /* test failure of command length before AUTO mode can be sent */
     FcnCode = TCS_HEATER_AUTO_CC;
     Size    = sizeof(TestMsg.Config);
     UT_SetDataBuffer(UT_KEY(CFE_MSG_GetMsgId), &TestMsgId, sizeof(TestMsgId), false);
@@ -760,6 +779,10 @@ void Test_TCS_HeaterDisable(void)
 {
     UT_CheckEvent_t EventTest;
 
+    /*
+     * Nominal manual OFF path: app enabled, mode command succeeds, heater
+     * command succeeds, and the success event proves the path completed.
+     */
     UT_CheckEvent_Setup(&EventTest, TCS_HEATER_DISABLE_INF_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
     UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_SUCCESS);
@@ -767,12 +790,20 @@ void Test_TCS_HeaterDisable(void)
     TCS_HeaterDisable();
     UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater disabled (%u)", (unsigned int)EventTest.MatchCount);
 
+    /*
+     * Disabled path: no UART command should be attempted because the app-side
+     * device state says the port is closed.
+     */
     UT_CheckEvent_Setup(&EventTest, TCS_HEATER_DISABLE_ERR_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_DISABLED;
     TCS_HeaterDisable();
     UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater disable rejected while disabled (%u)",
                   (unsigned int)EventTest.MatchCount);
 
+    /*
+     * Device failure path: a deferred TCS_CommandDevice error models a failed
+     * SET_MODE or SET_HEATER transaction and should produce an error event.
+     */
     UT_CheckEvent_Setup(&EventTest, TCS_HEATER_DISABLE_ERR_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
     UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_ERROR);
@@ -785,6 +816,10 @@ void Test_TCS_HeaterAuto(void)
 {
     UT_CheckEvent_t EventTest;
 
+    /*
+     * Nominal AUTO path: only SET_MODE(AUTO) is required, so one successful
+     * TCS_CommandDevice call reaches the information event.
+     */
     UT_CheckEvent_Setup(&EventTest, TCS_HEATER_AUTO_INF_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
     UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_SUCCESS);
@@ -792,12 +827,14 @@ void Test_TCS_HeaterAuto(void)
     UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater automatic control enabled (%u)",
                   (unsigned int)EventTest.MatchCount);
 
+    /* Disabled path mirrors the manual heater commands and rejects before UART. */
     UT_CheckEvent_Setup(&EventTest, TCS_HEATER_AUTO_ERR_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_DISABLED;
     TCS_HeaterAuto();
     UtAssert_True(EventTest.MatchCount == 1, "TCS: Heater automatic control rejected while disabled (%u)",
                   (unsigned int)EventTest.MatchCount);
 
+    /* Device failure path covers a failed SET_MODE(AUTO) transaction. */
     UT_CheckEvent_Setup(&EventTest, TCS_HEATER_AUTO_ERR_EID, NULL);
     TCS_AppData.HkTelemetryPkt.DeviceEnabled = TCS_DEVICE_ENABLED;
     UT_SetDeferredRetcode(UT_KEY(TCS_CommandDevice), 1, OS_ERROR);
@@ -859,7 +896,9 @@ void UtTest_Setup(void)
     ADD_TEST(TCS_Configure);
     ADD_TEST(TCS_Enable);
     ADD_TEST(TCS_HeaterEnable);
+    /* Added with the functioning model to cover manual OFF command behavior. */
     ADD_TEST(TCS_HeaterDisable);
+    /* Added with the functioning model to cover AUTO-mode command behavior. */
     ADD_TEST(TCS_HeaterAuto);
     ADD_TEST(TCS_Disable);
 }

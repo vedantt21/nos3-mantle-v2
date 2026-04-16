@@ -1,3 +1,17 @@
+# Implementation notes:
+# These commands are OpenC3 backdoor controls for the NOS3 TCS simulator.  They
+# do not go through the cFS TCS app or UART protocol; they publish command-bus
+# strings directly to the simulator node.  Use them for test setup or fault
+# injection, then use TCS target commands when verifying flight behavior.
+#
+# Mapping to simulator command_callback():
+#   TCS_SIM_ENABLE      -> ENABLE
+#   TCS_SIM_DISABLE     -> DISABLE and reset thermal state
+#   TCS_SIM_MODE_AUTO   -> MODE=AUTO
+#   TCS_SIM_MODE_MANUAL -> MODE=MANUAL
+#   TCS_SIM_HEATER_ON   -> HEATER=ON, accepted only when simulator is MANUAL
+#   TCS_SIM_HEATER_OFF  -> HEATER=OFF, accepted only when simulator is MANUAL
+#   TCS_SIM_SET_STATUS  -> STATUS=<STATUS>, used to drive device-status errors
 COMMAND SIM_CMDBUS_BRIDGE TCS_SIM_ENABLE BIG_ENDIAN "Enable Tcs Sim"
   APPEND_PARAMETER CMD_TEMPLATE 0 STRING '{"node":"tcs-sim-command","cmd":"ENABLE"}'
 

@@ -1,3 +1,10 @@
+# Implementation notes:
+# TCS_DATA_TLM mirrors TCS_Device_Data_tlm_t in tcs_device.h after the flight
+# app strips the UART 0xDEAD/0xBEEF sentinels.  The latest model changed the
+# thresholds from Celsius to Kelvin and replaced AMBIENT_TEMPERATURE with
+# SKIN_TEMPERATURE so operators see both thermal nodes:
+#   CURRENT_TEMPERATURE = internal/equipment node
+#   SKIN_TEMPERATURE    = external/shell node
 TELEMETRY TCS TCS_HK_TLM <%= CosmosCfsConfig::PROCESSOR_ENDIAN %> "TCS_Hk_tlm_t"
   APPEND_ID_ITEM CCSDS_STREAMID       16 UINT 0x08F1 "CCSDS Packet Identification" BIG_ENDIAN
   APPEND_ITEM    CCSDS_SEQUENCE       16 UINT         "CCSDS Packet Sequence Control" BIG_ENDIAN
@@ -28,16 +35,21 @@ TELEMETRY TCS TCS_DATA_TLM <%= CosmosCfsConfig::PROCESSOR_ENDIAN %> "TCS_Device_
   APPEND_ITEM    DEVICE_COUNTER       32 UINT         "Reported Device Command Counter"
   APPEND_ITEM    CURRENT_TEMPERATURE 32 FLOAT        "Internal temperature (K)"
     UNITS Kelvin K
+  # AUTO mode turns the heater on below this Kelvin threshold.
   APPEND_ITEM    LOWER_THRESHOLD     16 INT          "Lower heater control threshold (K)"
     UNITS Kelvin K
+  # AUTO mode turns the heater off above this Kelvin threshold.
   APPEND_ITEM    UPPER_THRESHOLD     16 INT          "Upper heater control threshold (K)"
     UNITS Kelvin K
+  # Simulator heater output state: OFF=0, ON=1.
   APPEND_ITEM    HEATER_STATE         8 UINT         "Heater state"
     STATE OFF 0
     STATE ON  1
+  # Control source: MANUAL accepts HEATER_ENABLE/DISABLE, AUTO uses thresholds.
   APPEND_ITEM    CONTROL_MODE         8 UINT         "Thermal control mode"
     STATE MANUAL 0
     STATE AUTO   1
+  # External shell node, replacing the old ambient-only telemetry field.
   APPEND_ITEM    SKIN_TEMPERATURE    32 FLOAT        "Skin temperature (K)"
     UNITS Kelvin K
 # TODO: This is specific to the tcs application, remove if using template generator

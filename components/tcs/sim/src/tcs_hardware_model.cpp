@@ -5,12 +5,34 @@
 #include <cmath>
 #include <math.h>
 
+/*
+** Implementation Notes:
+**   This file replaced the earlier single ambient-temperature sine curve with a
+**   small physics-based orbital thermal model.  To recreate the behavior:
+**   1. Build constant thermal/orbital parameters in build_thermal_model().
+**   2. On every NOS3 time tick, choose heater ON/OFF if AUTO mode is active.
+**   3. Integrate skin and internal temperatures with rk4_step().
+**   4. Serialize the same internal/skin temperatures and thresholds into the
+**      UART packet layout consumed by tcs_device.c.
+**
+**   The anonymous namespace keeps the math private to this simulator while
+**   leaving the public TcsHardwareModel interface unchanged for NOS3.
+*/
 namespace
 {
+    /*
+    ** Orbital/environment constants used by the new two-node thermal model.
+    ** Units are encoded in the names so later changes can be made without
+    ** reverse-engineering whether a value is seconds, meters, Kelvin, or watts.
+    */
     constexpr double TCS_PI = 3.14159265358979323846;
+    /* Limit each RK4 integration sub-step to one second for stable hysteresis. */
     constexpr double TCS_INTEGRATION_STEP_SECONDS = 1.0;
+    /* 165-minute orbit, matching the user-provided model assumptions. */
     constexpr double TCS_ORBIT_PERIOD_SECONDS = 165.0 * 60.0;
+    /* Beta angle tilts the Sun vector out of the orbital plane. */
     constexpr double TCS_BETA_DEG = 20.0;
+    /* Smooth eclipse ingress/egress over this many seconds. */
     constexpr double TCS_PENUMBRA_SECONDS = 180.0;
     constexpr double TCS_STEFAN_BOLTZMANN = 5.670374419e-8;
     constexpr double TCS_EARTH_GM_M3_PER_S2 = 3.986004418e14;
@@ -35,6 +57,11 @@ namespace
     constexpr double TCS_INTERNAL_POWER_SUNLIGHT_W = 8.0;
     constexpr double TCS_INTERNAL_POWER_ECLIPSE_W = 4.0;
 
+    /*
+    ** Attitude mode controls how much projected area sees the Sun.  NADIR uses
+    ** the face normals below; the other modes are retained to reproduce hot,
+    ** cold, or tumbling sensitivity cases without changing the integrator.
+    */
     enum TcsAttitudeMode
     {
         TCS_ATTITUDE_NADIR,
@@ -45,6 +72,10 @@ namespace
 
     constexpr TcsAttitudeMode TCS_ATTITUDE_MODE = TCS_ATTITUDE_NADIR;
 
+    /*
+    ** State vector integrated by RK4.  Skin is the radiating external node;
+    ** internal is the component/heater node reported to flight software.
+    */
     struct ThermalState
     {
         double skin_temperature_k;
@@ -85,23 +116,35 @@ namespace
 
     double deg_to_rad(double degrees)
     {
+        /* Keep trigonometry inputs in radians while leaving configuration in degrees. */
         return degrees * TCS_PI / 180.0;
     }
 
     double dot_product(const std::array<double, 3> &lhs, const std::array<double, 3> &rhs)
     {
+        /* Face-normal projection helper used for both Sun and Earth view terms. */
         return lhs[0] * rhs[0] + lhs[1] * rhs[1] + lhs[2] * rhs[2];
     }
 
     void orbit_from_period(double orbit_period_s, double earth_gm_m3_per_s2, double earth_radius_m,
                            double &altitude_m, double &semi_major_axis_m)
     {
+        /*
+        ** Convert orbit period into semi-major axis using Kepler's third law.
+        ** Altitude is then semi-major axis minus Earth radius, which is needed
+        ** for eclipse geometry and Earth view factor.
+        */
         semi_major_axis_m = std::pow(earth_gm_m3_per_s2 * std::pow(orbit_period_s / (2.0 * TCS_PI), 2.0), 1.0 / 3.0);
         altitude_m = semi_major_axis_m - earth_radius_m;
     }
 
     double eclipse_fraction_beta(double beta_rad, double earth_radius_m, double altitude_m, double &beta_critical_rad)
     {
+        /*
+        ** Estimate the fraction of each orbit spent in eclipse for the selected
+        ** beta angle.  Above the critical beta angle the orbit never enters
+        ** eclipse, so sunlight stays at 1.0 for the whole period.
+        */
         beta_rad = std::fabs(beta_rad);
         beta_critical_rad = std::asin(earth_radius_m / (earth_radius_m + altitude_m));
 
@@ -121,8 +164,18 @@ namespace
     {
         ThermalModelParameters params{};
 
+        /*
+        ** Blend paint and solar-cell optical properties by surface coverage.
+        ** This gives one effective absorptivity/emissivity pair for the simple
+        ** model instead of assigning material properties per face.
+        */
         const double alpha = TCS_PV_FRACTION * TCS_ALPHA_PV + (1.0 - TCS_PV_FRACTION) * TCS_ALPHA_PAINT;
         const double emissivity = TCS_PV_FRACTION * TCS_EPSILON_PV + (1.0 - TCS_PV_FRACTION) * TCS_EPSILON_PAINT;
+        /*
+        ** Split spacecraft mass into thermal capacitance for the skin node and
+        ** internal node.  Both use aluminum specific heat as the simplifying
+        ** assumption for heat capacity.
+        */
         const double skin_mass_kg = TCS_SKIN_MASS_FRACTION * TCS_TOTAL_MASS_KG;
         const double internal_mass_kg = TCS_TOTAL_MASS_KG - skin_mass_kg;
 
@@ -139,6 +192,10 @@ namespace
             2.0 * (TCS_CUBESAT_WIDTH_M * TCS_CUBESAT_HEIGHT_M +
                    TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_HEIGHT_M +
                    TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_WIDTH_M);
+        /*
+        ** Six axis-aligned face normals are enough for the simple CubeSat
+        ** geometry.  The face order must match face_areas_m2 below.
+        */
         params.face_normals = {{
             {{ 1.0,  0.0,  0.0}},
             {{-1.0,  0.0,  0.0}},
@@ -155,6 +212,7 @@ namespace
             TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_WIDTH_M,
             TCS_CUBESAT_LENGTH_M * TCS_CUBESAT_WIDTH_M
         }};
+        /* Thermal conductance is h*A between the internal and skin nodes. */
         params.absorptivity = alpha;
         params.emissivity = emissivity;
         params.skin_heat_capacity_j_per_k = skin_mass_kg * TCS_SPECIFIC_HEAT_J_PER_KG_K;
@@ -163,6 +221,10 @@ namespace
 
         orbit_from_period(params.orbit_period_s, params.earth_gm_m3_per_s2, params.earth_radius_m,
                           params.orbital_altitude_m, params.orbital_semi_major_axis_m);
+        /*
+        ** Precompute orbit-derived values once.  They are constant for the run,
+        ** so every derivative evaluation can reuse them cheaply.
+        */
         params.eclipse_fraction =
             eclipse_fraction_beta(params.beta_rad, params.earth_radius_m, params.orbital_altitude_m,
                                   params.beta_critical_rad);
@@ -174,12 +236,18 @@ namespace
 
     const ThermalModelParameters &thermal_model(void)
     {
+        /* Lazily build immutable parameters once and reuse them for all ticks. */
         static const ThermalModelParameters params = build_thermal_model();
         return params;
     }
 
     double sun_factor_penumbra(double tau_s, const ThermalModelParameters &params)
     {
+        /*
+        ** Return sunlight multiplier in [0, 1].  The old model used a sine wave
+        ** ambient term; this model dims direct solar and albedo heat during
+        ** eclipse while Earth IR remains present.
+        */
         if (params.eclipse_fraction <= 0.0)
         {
             return 1.0;
@@ -207,16 +275,23 @@ namespace
 
         if ((tau_s >= eclipse_start_s - transition_s / 2.0) && (tau_s < eclipse_start_s + transition_s / 2.0))
         {
+            /* Ingress: cosine ramp from full Sun down to eclipse. */
             const double x = (tau_s - (eclipse_start_s - transition_s / 2.0)) / transition_s;
             return 0.5 * (1.0 + std::cos(TCS_PI * x));
         }
 
+        /* Egress: cosine ramp from eclipse back to full Sun. */
         const double x = (tau_s - (eclipse_end_s - transition_s / 2.0)) / transition_s;
         return 0.5 * (1.0 - std::cos(TCS_PI * x));
     }
 
     std::array<double, 3> sun_vector_to_sun(double tau_s, const ThermalModelParameters &params)
     {
+        /*
+        ** Sun vector in the spacecraft/orbit frame.  The orbital phase moves
+        ** the vector around the spacecraft once per orbit and beta adds a fixed
+        ** out-of-plane component.
+        */
         const double orbital_phase_rad = 2.0 * TCS_PI * tau_s / params.orbit_period_s;
         return {{
             std::cos(params.beta_rad) * std::sin(orbital_phase_rad),
@@ -227,6 +302,10 @@ namespace
 
     double projected_area_to_sun(const ThermalModelParameters &params, const std::array<double, 3> &sun_vector)
     {
+        /*
+        ** Convert Sun direction into illuminated area.  For NADIR each face
+        ** contributes area*cos(theta) only when the face points toward the Sun.
+        */
         switch (TCS_ATTITUDE_MODE)
         {
             case TCS_ATTITUDE_NADIR:
@@ -260,6 +339,10 @@ namespace
     ThermalDerivatives thermal_derivatives(double simulation_time_s, const ThermalState &state, bool heater_enabled)
     {
         const ThermalModelParameters &params = thermal_model();
+        /*
+        ** Fold absolute simulation time into one orbit so the environment is
+        ** periodic while _simulation_time_seconds can keep increasing forever.
+        */
         double tau_s = std::fmod(simulation_time_s, params.orbit_period_s);
         if (tau_s < 0.0)
         {
@@ -269,12 +352,21 @@ namespace
         const double sun_factor = sun_factor_penumbra(tau_s, params);
         const std::array<double, 3> sun_vector = sun_vector_to_sun(tau_s, params);
         const double projected_solar_area_m2 = projected_area_to_sun(params, sun_vector);
+        /*
+        ** Direct solar heat absorbed by the current projected area.  Eclipse or
+        ** penumbra scales this term through sun_factor.
+        */
         const double solar_heat_w =
             params.absorptivity * params.solar_constant_w_per_m2 * projected_solar_area_m2 * sun_factor;
 
         const std::array<double, 3> earth_vector = {{0.0, 0.0, 1.0}};
         double albedo_heat_w = 0.0;
         double earth_ir_heat_w = 0.0;
+        /*
+        ** Earth terms are accumulated face-by-face.  Albedo is sunlight-driven
+        ** and goes away in eclipse; Earth IR is thermal radiation from Earth and
+        ** remains active regardless of sun_factor.
+        */
         for (std::size_t face = 0; face < params.face_normals.size(); ++face)
         {
             const double cos_earth = std::max(0.0, dot_product(params.face_normals[face], earth_vector));
@@ -294,6 +386,11 @@ namespace
             TCS_INTERNAL_POWER_ECLIPSE_W +
             (TCS_INTERNAL_POWER_SUNLIGHT_W - TCS_INTERNAL_POWER_ECLIPSE_W) * sun_factor;
         const double heater_heat_w = heater_enabled ? TCS_HEATER_POWER_W : 0.0;
+        /*
+        ** Skin loses heat by Stefan-Boltzmann radiation to space.  Internal and
+        ** skin exchange heat through conductance; positive conduction means the
+        ** internal node is warmer and sends heat out to the skin.
+        */
         const double radiated_heat_w =
             params.emissivity * params.sigma * params.total_external_area_m2 *
             std::pow(state.skin_temperature_k, 4.0);
@@ -301,6 +398,12 @@ namespace
             params.thermal_conductance_w_per_k * (state.internal_temperature_k - state.skin_temperature_k);
 
         ThermalDerivatives derivatives{};
+        /*
+        ** Energy balance:
+        **   skin:     solar + albedo + Earth IR + conduction - radiation
+        **   internal: internal electronics + heater - conduction
+        ** Divide watts by heat capacity (J/K) to get K/s.
+        */
         derivatives.d_skin_k_per_s =
             (solar_heat_w + albedo_heat_w + earth_ir_heat_w + conduction_heat_w - radiated_heat_w) /
             params.skin_heat_capacity_j_per_k;
@@ -311,6 +414,11 @@ namespace
 
     ThermalState rk4_step(double simulation_time_s, double step_s, const ThermalState &state, bool heater_enabled)
     {
+        /*
+        ** Fourth-order Runge-Kutta integration samples derivatives at the start,
+        ** midpoint, midpoint, and end of the step.  This is why the model can
+        ** use one-second steps without the drift/noise of a simple Euler update.
+        */
         const ThermalDerivatives k1 = thermal_derivatives(simulation_time_s, state, heater_enabled);
 
         const ThermalState state_k2 = {
@@ -343,6 +451,11 @@ namespace
 
     bool thermal_state_is_valid(const ThermalState &state)
     {
+        /*
+        ** Guardrails catch numerical blow-ups or impossible temperatures before
+        ** they enter telemetry.  The caller restores the previous state if this
+        ** check fails.
+        */
         return std::isfinite(state.skin_temperature_k) && std::isfinite(state.internal_temperature_k) &&
                state.skin_temperature_k > 0.0 && state.internal_temperature_k > 0.0 &&
                state.skin_temperature_k < 1000.0 && state.internal_temperature_k < 1000.0;
@@ -350,6 +463,7 @@ namespace
 
     float kelvin_to_telemetry_kelvin(double temperature_k)
     {
+        /* Telemetry is already Kelvin; this cast documents the double-to-float boundary. */
         return static_cast<float>(temperature_k);
     }
 
@@ -357,6 +471,10 @@ namespace
     {
         std::uint32_t bits = 0;
         static_assert(sizeof(float) == sizeof(bits), "Expected 32-bit float telemetry fields.");
+        /*
+        ** Preserve IEEE-754 bits exactly for the UART packet.  The byte order is
+        ** applied later in create_tcs_data() when the uint32 is shifted out.
+        */
         std::memcpy(&bits, &value, sizeof(bits));
         return bits;
     }
@@ -537,6 +655,10 @@ namespace Nos3
 
     void TcsHardwareModel::reset_thermal_state(void)
     {
+        /*
+        ** Reset all thermal state in Kelvin.  Disabling the simulator calls
+        ** this so the next ENABLE starts from a known, reproducible condition.
+        */
         _simulation_time_seconds = 0.0;
         _skin_temperature_k = TCS_INITIAL_SKIN_TEMPERATURE_K;
         _internal_temperature_k = TCS_INITIAL_INTERNAL_TEMPERATURE_K;
@@ -549,6 +671,11 @@ namespace Nos3
 
     void TcsHardwareModel::time_tick_callback(void)
     {
+        /*
+        ** Time ticks are the only place thermal state advances.  UART requests
+        ** only serialize the current state, which keeps telemetry reads from
+        ** changing the physics.
+        */
         if (_enabled != TCS_SIM_SUCCESS)
         {
             return;
@@ -564,6 +691,10 @@ namespace Nos3
 
     void TcsHardwareModel::update_thermal_state(double dt)
     {
+        /*
+        ** Save the incoming state so invalid numerical results can be rolled
+        ** back without resetting counters, configuration, or mode.
+        */
         const double previous_internal_temperature_k = _internal_temperature_k;
         const double previous_skin_temperature_k = _skin_temperature_k;
         double remaining_seconds = dt;
@@ -573,6 +704,12 @@ namespace Nos3
         {
             if (_control_mode == TCS_CONTROL_MODE_AUTO)
             {
+                /*
+                ** AUTO hysteresis:
+                **   below lower threshold -> heater ON
+                **   above upper threshold -> heater OFF
+                **   inside the band       -> keep previous heater state
+                */
                 if (_internal_temperature_k < _lower_threshold_k)
                 {
                     _heater_state = TCS_HEATER_STATE_ON;
@@ -585,6 +722,11 @@ namespace Nos3
 
             const double step_seconds = std::min(remaining_seconds, TCS_INTEGRATION_STEP_SECONDS);
             const ThermalState current_state = {_skin_temperature_k, _internal_temperature_k};
+            /*
+            ** Use the current heater state for this sub-step.  If AUTO changes
+            ** state at the start of a later one-second chunk, that new state is
+            ** used for the next RK4 call.
+            */
             const ThermalState next_state =
                 rk4_step(_simulation_time_seconds, step_seconds, current_state,
                          _heater_state == TCS_HEATER_STATE_ON);
@@ -649,6 +791,11 @@ namespace Nos3
     /* Custom function to prepare the Tcs Data */
     void TcsHardwareModel::create_tcs_data(std::vector<uint8_t>& out_data)
     {
+        /*
+        ** Convert model state into the UART telemetry packet.  Thresholds are
+        ** rounded to integer Kelvin because the cFS packet fields are int16_t;
+        ** temperatures remain IEEE-754 floats so OpenC3 can display decimals.
+        */
         float current_temperature_k = kelvin_to_telemetry_kelvin(_internal_temperature_k);
         float skin_temperature_k = kelvin_to_telemetry_kelvin(_skin_temperature_k);
         std::uint16_t lower_threshold = static_cast<std::uint16_t>(std::lround(_lower_threshold_k));
@@ -669,7 +816,16 @@ namespace Nos3
         out_data[4] = (_count >>  8) & 0x000000FF; 
         out_data[5] =  _count & 0x000000FF;
         
-        /* Thermal payload is transmitted big-endian on the device UART link. */
+        /*
+        ** Thermal payload is transmitted big-endian on the device UART link.
+        ** This byte map must match TCS_RequestData() in tcs_device.c:
+        **   06-09 internal/current temperature K
+        **   10-11 lower threshold K
+        **   12-13 upper threshold K
+        **   14 heater state
+        **   15 control mode
+        **   16-19 skin temperature K
+        */
         out_data[6]  = (current_temperature >> 24) & 0x000000FF;
         out_data[7]  = (current_temperature >> 16) & 0x000000FF;
         out_data[8]  = (current_temperature >> 8) & 0x000000FF;
@@ -776,7 +932,11 @@ namespace Nos3
                         break;
 
                     case 4:
-                        /* Set control mode */
+                        /*
+                        ** Set control mode from the low payload byte.  The
+                        ** cFS app sends a 32-bit payload, but mode only needs
+                        ** 0 MANUAL or 1 AUTO, so byte 6 is the value.
+                        */
                         if (in_data[6] <= TCS_CONTROL_MODE_AUTO)
                         {
                             _control_mode = in_data[6];
@@ -790,7 +950,12 @@ namespace Nos3
                         break;
 
                     case 5:
-                        /* Set heater state */
+                        /*
+                        ** Set manual heater state from the low payload byte.
+                        ** The flight app forces MANUAL mode before sending
+                        ** this opcode, while simulator backdoor commands also
+                        ** reject heater changes unless already MANUAL.
+                        */
                         if (in_data[6] <= TCS_HEATER_STATE_ON)
                         {
                             _heater_state = in_data[6];
